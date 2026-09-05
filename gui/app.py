@@ -7,7 +7,7 @@ import streamlit as st
 
 from gui.theme import apply_radiofry_theme, render_section_explainer
 from radiofry.ingestion.iq_parser import IQFormat
-from radiofry.pipeline import analyze_capture, load_capture
+from radiofry.pipeline import DEFAULT_MAX_CAPTURE_BYTES, analyze_capture, load_capture
 from radiofry.reporting.report_builder import build_pdf_report, report_json
 
 
@@ -114,10 +114,27 @@ st.info("For meaningful RF identification, use baseband I/Q from a documented SD
 st.subheader("Upload and analyze")
 uploaded = st.file_uploader("Upload a WAV or raw IQ capture", type=["wav", "iq"])
 if uploaded is not None:
+    if uploaded.size > DEFAULT_MAX_CAPTURE_BYTES:
+        st.error(f"Capture exceeds the {DEFAULT_MAX_CAPTURE_BYTES // (1024 * 1024)} MB upload limit.")
+        st.stop()
+
+    upload_key = (uploaded.name, uploaded.size)
+    previous_key = st.session_state.get("upload_key")
+    if previous_key != upload_key:
+        previous_path = Path(st.session_state.get("upload_path", ""))
+        if previous_path.is_file():
+            previous_path.unlink(missing_ok=True)
+        st.session_state.pop("report", None)
+        st.session_state.pop("signal", None)
+        st.session_state.pop("upload_analysis_key", None)
+        st.session_state["upload_key"] = upload_key
+
     temporary_path = Path(st.session_state.get("upload_path", ""))
     if not temporary_path.exists() or st.session_state.get("upload_name") != uploaded.name:
         suffix = Path(uploaded.name).suffix.lower()
-        temporary_path = Path.cwd() / f".radiofry_upload{suffix}"
+        temporary_file = tempfile.NamedTemporaryFile(prefix="radiofry-", suffix=suffix, delete=False)
+        temporary_path = Path(temporary_file.name)
+        temporary_file.close()
         temporary_path.write_bytes(uploaded.getvalue())
         st.session_state["upload_path"] = str(temporary_path)
         st.session_state["upload_name"] = uploaded.name
@@ -152,7 +169,7 @@ if uploaded is not None:
             st.session_state["report"] = report
             st.session_state["signal"] = signal
             st.session_state["upload_analysis_key"] = uploaded.name
-        except (OSError, ValueError) as error:
+        except (OSError, ValueError, RuntimeError, ImportError) as error:
             st.error(str(error))
 
     signal = st.session_state.get("signal")

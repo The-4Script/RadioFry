@@ -1,12 +1,1 @@
-numpy>=1.26
-scipy>=1.12
-torch>=2.2
-torchvision>=0.17
-streamlit>=1.32
-matplotlib>=3.8
-plotly>=5.20
-scikit-learn>=1.4
-h5py>=3.10
-scikit-commpy>=0.8
-reedsolo>=1.7
-pytest>=8.0
+-e .[ml,gui,fec]

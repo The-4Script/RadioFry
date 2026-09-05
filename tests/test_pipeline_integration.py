@@ -33,6 +33,7 @@ def test_pipeline_unknown_rate_degrades_without_crashing(tmp_path: Path) -> None
     assert encoded["stages"]["parameters"]["symbol_rate_hz"] is None
     assert encoded["stages"]["bitstream_analysis"]["available"] is True
     assert encoded["stages"]["bitstream_analysis"]["fec"]["available"] is False
+    assert encoded["stages"]["runtime"]["ready"] is False
 
 
 def test_pipeline_open_set_rejection_skips_demodulation(monkeypatch) -> None:

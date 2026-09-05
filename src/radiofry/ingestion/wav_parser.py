@@ -17,11 +17,21 @@ def _scale_audio(samples: np.ndarray) -> np.ndarray:
     return samples.astype(np.float32, copy=False)
 
 
-def read_wav(path: str | Path) -> UnifiedSignalContainer:
+def read_wav(
+    path: str | Path,
+    *,
+    max_bytes: int | None = None,
+    max_samples: int | None = None,
+) -> UnifiedSignalContainer:
     """Read a WAV file, treating stereo channels as I/Q and mono as analytic IQ."""
 
+    file_path = Path(path)
+    if max_bytes is not None and file_path.stat().st_size > max_bytes:
+        raise ValueError(f"WAV file exceeds the {max_bytes:,}-byte limit")
     sample_rate, raw = wavfile.read(path)
     samples = _scale_audio(np.asarray(raw))
+    if max_samples is not None and samples.shape[0] > max_samples:
+        raise ValueError(f"WAV file exceeds the {max_samples:,}-sample limit")
     if samples.ndim == 2 and samples.shape[1] == 2:
         iq = samples[:, 0] + 1j * samples[:, 1]
         channel_mode = "stereo_iq"

@@ -17,9 +17,12 @@ from .correlation.bitstream_correlation import correlate_bitstream
 from .decoding.deinterleave_search import search_deinterleave
 from .decoding.fec.dispatch import decode_fec
 from .reporting.report_builder import build_report
+from .runtime import check_runtime_artifacts
 
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_MAX_CAPTURE_BYTES = 64 * 1024 * 1024
+DEFAULT_MAX_CAPTURE_SAMPLES = 5_000_000
 
 
 def _resolve_default_path(path: str | Path, relative_to_repository: bool = True) -> Path:
@@ -29,12 +32,19 @@ def _resolve_default_path(path: str | Path, relative_to_repository: bool = True)
     return candidate
 
 
-def load_capture(path: str | Path, *, sample_rate: float | None = None, iq_format: IQFormat | None = None) -> UnifiedSignalContainer:
+def load_capture(
+    path: str | Path,
+    *,
+    sample_rate: float | None = None,
+    iq_format: IQFormat | None = None,
+    max_bytes: int | None = DEFAULT_MAX_CAPTURE_BYTES,
+    max_samples: int | None = DEFAULT_MAX_CAPTURE_SAMPLES,
+) -> UnifiedSignalContainer:
     path = Path(path)
     if path.suffix.lower() == ".wav":
-        return read_wav(path)
+        return read_wav(path, max_bytes=max_bytes, max_samples=max_samples)
     if path.suffix.lower() == ".iq":
-        return read_iq(path, sample_rate=sample_rate, fmt=iq_format)
+        return read_iq(path, sample_rate=sample_rate, fmt=iq_format, max_bytes=max_bytes, max_samples=max_samples)
     raise ValueError("supported capture formats are .wav and .iq")
 
 
@@ -99,7 +109,12 @@ def analyze_capture(
             "bits": len(bits),
         })
     demodulation_stage = demodulation or {"available": False, "message": "Demodulation was not attempted because the fused modulation decision was unavailable."}
+    runtime = check_runtime_artifacts({
+        "modulation": model_path,
+        "interleaver": interleaver_model_path,
+        "fec": fec_model_path,
+    })
     return build_report(
         source={"format": processed.source_format, "sample_rate": processed.sample_rate, "samples": processed.iq.size},
-        stages={"parameters": parameters, "classical_modulation": classical, "cnn_modulation": prediction, "fusion": fusion or {"label": "Unclassified", "trust_score": 0.0, "review_recommended": True, "message": prediction.message}, "demodulation": demodulation_stage, "bitstream_analysis": bitstream_stages},
+        stages={"runtime": runtime, "parameters": parameters, "classical_modulation": classical, "cnn_modulation": prediction, "fusion": fusion or {"label": "Unclassified", "trust_score": 0.0, "review_recommended": True, "message": prediction.message}, "demodulation": demodulation_stage, "bitstream_analysis": bitstream_stages},
     )

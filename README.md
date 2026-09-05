@@ -4,25 +4,27 @@ RadioFry is a hardware-agnostic pipeline for analyzing WAV and raw IQ captures,
 estimating signal parameters, classifying modulation, and reporting decoding
 evidence. The implementation follows the SIH26147 architecture.
 
-## Development setup
+## Inference setup
 
-The documented runtime is WSL2 Ubuntu with Python 3.14. Create an environment
-and install the core plus development dependencies:
+The supported runtime is Python 3.11 through 3.14. Create an environment and
+install the inference application dependencies:
 
 ```bash
-python3 -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[dev]'
-pytest
+python -m pip install -r requirements.txt
+PYTHONPATH=src streamlit run gui/app.py --server.headless true
 ```
 
-Optional ML, GUI, and FEC dependencies can be installed with `.[ml,gui,fec]`.
-RML2016.10a is supported at `data/RML2016.10a_dict.pkl` when supplied locally.
-Training datasets are not included in this release. RML2018.01A is also
-supported directly in its original HDF5 form; place the extracted file
-at `data/2018.01/GOLD_XYZ_OSC.0001_1024.hdf5` (or pass another `.h5` path to `--data`). Do not
-convert it to pickle: the trainer uses bounded stratified reads so a 2-million
-example archive does not need to be loaded entirely into RAM.
+The hosted application uses the checked-in inference artifacts in
+`models_saved/`. The three required files are `modulation_cnn.pt`,
+`interleaver_classifier.pkl`, and `fec_classifier.pkl`. The application reports
+missing or invalid artifacts as unavailable analysis stages rather than
+accepting a result as definitive.
+
+Training dependencies and datasets are not part of the deployment install.
+They can be installed separately with `python -m pip install -e '.[training]'`
+when working on the excluded training workflow.
 
 For NVIDIA GPU training on Windows, install the CUDA wheel after the base
 requirements because the default PyPI Torch package may be CPU-only:

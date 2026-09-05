@@ -5,6 +5,8 @@ from gui.theme import apply_radiofry_theme, render_section_explainer
 
 apply_radiofry_theme()
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
 
 def _format_value(value: object, unit: str) -> str:
     return f"{value:,.1f} {unit}" if isinstance(value, (int, float)) else "Unknown"
@@ -30,6 +32,6 @@ else:
     columns[2].metric("Symbol rate", _format_value(parameters.get("symbol_rate_hz"), "Hz"))
     st.json(parameters)
     st.info(f"Estimation method: {parameters.get('method', 'unknown')}. Unknown absolute sample rates require a sensor header or manual input.")
-    plot_path = Path("reports/accuracy_vs_snr.png")
+    plot_path = REPOSITORY_ROOT / "reports" / "accuracy_vs_snr.png"
     if plot_path.exists():
         st.image(str(plot_path), caption="Modulation accuracy by SNR")

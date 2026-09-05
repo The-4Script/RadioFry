@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import numpy as np
+import pytest
 from scipy.io import wavfile
 
 from radiofry.dsp.preprocessing import preprocess
@@ -40,6 +41,14 @@ def test_load_capture_dispatches_by_capture_extension(tmp_path: Path) -> None:
 
     assert load_capture(wav_path).source_format == "wav"
     assert load_capture(iq_path, sample_rate=2_000, iq_format=IQFormat("int16", "little")).source_format == "iq"
+
+
+def test_load_capture_rejects_sample_limit(tmp_path: Path) -> None:
+    path = tmp_path / "oversized.iq"
+    np.array([1, -2, 3, -4], dtype="<i2").tofile(path)
+
+    with pytest.raises(ValueError, match="sample limit"):
+        load_capture(path, max_samples=1)
 
 
 def test_preprocess_removes_dc_and_normalizes_power() -> None:

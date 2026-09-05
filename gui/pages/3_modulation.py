@@ -8,6 +8,8 @@ from gui.theme import apply_radiofry_theme, render_section_explainer
 
 apply_radiofry_theme()
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
 st.header("Modulation")
 render_section_explainer(
     "Stage 3: decide what kind of signal it is",
@@ -64,6 +66,6 @@ else:
         trajectory.update_layout(height=500, margin={"l": 0, "r": 0, "t": 30, "b": 0}, scene={"xaxis_title": "In-phase", "yaxis_title": "Quadrature", "zaxis_title": "Symbol index"})
         st.plotly_chart(trajectory, width="stretch")
     for bucket in ("low", "mid", "high"):
-        plot_path = Path(f"reports/confusion_{bucket}.png")
+        plot_path = REPOSITORY_ROOT / "reports" / f"confusion_{bucket}.png"
         if plot_path.exists():
             st.image(str(plot_path), caption=f"{bucket.title()} SNR confusion matrix")

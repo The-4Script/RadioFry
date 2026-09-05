@@ -29,15 +29,22 @@ def read_iq(
     *,
     sample_rate: float | None = None,
     fmt: IQFormat | None = None,
+    max_bytes: int | None = None,
+    max_samples: int | None = None,
 ) -> UnifiedSignalContainer:
     """Read interleaved I,Q values from a headerless binary file."""
 
     fmt = fmt or IQFormat()
+    file_path = Path(path)
+    if max_bytes is not None and file_path.stat().st_size > max_bytes:
+        raise ValueError(f"IQ file exceeds the {max_bytes:,}-byte limit")
     values = np.fromfile(path, dtype=fmt.numpy_dtype())
     if values.size == 0:
         raise ValueError("IQ file contains no samples")
     if values.size % 2:
         raise ValueError("interleaved IQ file must contain an even number of values")
+    if max_samples is not None and values.size // 2 > max_samples:
+        raise ValueError(f"IQ file exceeds the {max_samples:,}-sample limit")
     pairs = values.reshape(-1, 2)
     iq = pairs[:, 0].astype(np.float32) + 1j * pairs[:, 1].astype(np.float32)
     return UnifiedSignalContainer(
