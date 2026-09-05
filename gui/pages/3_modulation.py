@@ -1,9 +1,25 @@
+import json
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
 from gui.theme import render_empty_state, render_method_note, render_page_shell, render_stage_header
+from radiofry.models.modulation_metrics import expected_accuracy_at_snr
+
+
+def _expected_cnn_accuracy(snr_db: float | None) -> float | None:
+    if snr_db is None:
+        return None
+    metrics_path = Path(__file__).resolve().parents[2] / "models_saved" / "modulation_cnn_metrics.json"
+    try:
+        metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+        points = sorted((float(snr), float(accuracy)) for snr, accuracy in metrics["accuracy_by_snr"].items())
+    except (OSError, KeyError, TypeError, ValueError):
+        return None
+    return expected_accuracy_at_snr(metrics, snr_db)
 
 render_page_shell(3)
 report = st.session_state.get("report")
@@ -17,6 +33,7 @@ if report is None:
 else:
     classical = report["stages"].get("classical_modulation", {})
     prediction = report["stages"].get("cnn_modulation", {})
+    parameters = report["stages"].get("parameters", {})
     fusion = report["stages"].get("fusion", {})
     left, right = st.columns(2)
     with left:
@@ -29,6 +46,9 @@ else:
         st.metric("Decision", fusion.get("label", "Unclassified"))
         st.metric("Trust score", f"{fusion.get('trust_score', 0):.1%}")
         st.caption(f"CNN top-1: {prediction.get('confidence', 0):.1%}")
+        expected_accuracy = _expected_cnn_accuracy(parameters.get("snr_db"))
+        if expected_accuracy is not None:
+            st.caption(f"Expected CNN accuracy at estimated SNR ({parameters['snr_db']:.1f} dB): {expected_accuracy:.1%}")
         st.markdown("</div>", unsafe_allow_html=True)
 
     if prediction.get("available"):

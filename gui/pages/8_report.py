@@ -53,9 +53,16 @@ else:
         st.download_button("Download JSON", report_json(report), "radiofry-report.json", "application/json", use_container_width=True)
     with downloads[1]:
         signal = st.session_state.get("signal")
-        pdf_path = Path(tempfile.gettempdir()) / "radiofry-report.pdf"
-        build_pdf_report(report, str(pdf_path), signal)
-        st.download_button("Download PDF", pdf_path.read_bytes(), "radiofry-report.pdf", "application/pdf", use_container_width=True)
+        report_key = report.get("generated_at", "")
+        if st.session_state.get("pdf_report_key") != report_key:
+            st.session_state.pop("pdf_report_bytes", None)
+            st.session_state["pdf_report_key"] = report_key
+        if st.button("Prepare PDF", use_container_width=True):
+            pdf_path = Path(tempfile.gettempdir()) / "radiofry-report.pdf"
+            build_pdf_report(report, str(pdf_path), signal)
+            st.session_state["pdf_report_bytes"] = pdf_path.read_bytes()
+        if st.session_state.get("pdf_report_bytes"):
+            st.download_button("Download PDF", st.session_state["pdf_report_bytes"], "radiofry-report.pdf", "application/pdf", use_container_width=True)
 
     with st.expander("Inspect raw report JSON", expanded=False):
         st.json(report)

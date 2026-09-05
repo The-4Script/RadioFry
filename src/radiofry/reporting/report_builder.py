@@ -100,9 +100,11 @@ def build_pdf_report(report: dict[str, Any], output_path: str, signal: Any | Non
             f"Modulation decision: {fusion.get('label', 'Unclassified')}",
             f"CNN confidence: {prediction.get('confidence', 0):.1%}",
             f"Fused trust score: {fusion.get('trust_score', 0):.1%}",
+            f"Carrier frequency: {parameters.get('carrier_frequency_hz') or 'unknown'} Hz",
             f"Occupied bandwidth: {parameters.get('occupied_bandwidth_hz') or 'unknown'} Hz",
             f"Estimated SNR: {parameters.get('snr_db') or 'unknown'} dB",
             f"Estimated symbol rate: {parameters.get('symbol_rate_hz') or 'unknown'} Hz",
+            f"Symbol-rate confidence: {parameters.get('symbol_rate_confidence', 0):.1%}",
             f"Sync pattern: {correlation.get('sync_pattern') or 'not detected'}",
         ]
         figure.text(0.09, 0.76, "\n".join(lines), family="monospace", fontsize=12, va="top", linespacing=1.7)

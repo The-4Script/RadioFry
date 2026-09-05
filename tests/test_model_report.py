@@ -10,6 +10,7 @@ import radiofry.pipeline as pipeline
 from radiofry.models.modulation_cnn import ModulationCNN
 from radiofry.models.signal_features import add_signal_features
 from radiofry.reporting.report_builder import build_pdf_report, build_report, report_json
+from radiofry.dsp.parameter_estimation import ParameterEstimate
 from radiofry.training.train_modulation import load_rml_dataset
 
 
@@ -33,6 +34,14 @@ def test_report_serializes_dataclasses_and_numpy_values() -> None:
     loaded = json.loads(report_json(report))
     assert loaded["source"]["samples"] == 8
     assert loaded["stages"]["scores"] == [0.2, 0.8]
+
+
+def test_report_serializes_carrier_frequency() -> None:
+    report = build_report(source={}, stages={"parameters": ParameterEstimate(100.0, 12.0, 500.0, carrier_frequency_hz=915_000_000)})
+
+    loaded = json.loads(report_json(report))
+
+    assert loaded["stages"]["parameters"]["carrier_frequency_hz"] == 915_000_000
 
 
 def test_report_serializes_complex_values_as_coordinates() -> None:

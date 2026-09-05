@@ -19,4 +19,4 @@ else:
     left.metric("Modulation used", result.get("modulation", "Unknown"))
     right.metric("Recovered bits", f"{len(result.get('bits', [])):,}")
     render_bit_preview(result.get("bits", []), "Recovered bitstream")
-    render_method_note("Method and limits", "Demodulation uses the selected modulation family and estimated signal parameters. Symbol timing, carrier recovery, and protocol-specific framing may still need expert calibration.")
+    render_method_note("Method and limits", "Demodulation uses the selected modulation family and a coarse search across integer sample offsets within one estimated symbol. Fractional timing recovery, carrier recovery, and protocol-specific framing may still need expert calibration.")

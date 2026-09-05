@@ -68,6 +68,16 @@ PYTHONPATH=src python -m radiofry.training.train_interleaver
 PYTHONPATH=src python -m radiofry.training.train_fec
 ```
 
+Evaluate the classical modulation-family thresholds against the same RML corpus
+used for CNN training and write the auditable companion metrics file:
+
+```bash
+PYTHONPATH=src python -m radiofry.training.evaluate_classical --data data/RML2016.10a_dict.pkl --output models_saved/classical_modulation_metrics.json
+```
+
+The command requires the corpus locally and intentionally does not ship fabricated
+accuracy values when that dataset is unavailable.
+
 Regenerate the synthetic manifests before training if the checked-in corpus is
 missing an architecture class; the generator is the source of truth for the
 five interleaver labels and five FEC labels.

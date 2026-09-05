@@ -12,6 +12,14 @@ class ClassicalFamilyEstimate:
     evidence: dict[str, float]
 
 
+CLASSICAL_THRESHOLDS = {
+    "amplitude_cv_psk": 0.15,
+    "amplitude_cv_qam": 0.2,
+    "frequency_cv_fsk": 0.8,
+    "fourth_power_psk": 0.2,
+}
+
+
 def estimate_modulation_family(iq: np.ndarray) -> ClassicalFamilyEstimate:
     """Classify a waveform coarsely using envelope and instantaneous phase statistics."""
 
@@ -29,11 +37,11 @@ def estimate_modulation_family(iq: np.ndarray) -> ClassicalFamilyEstimate:
         "frequency_cv": frequency_cv,
         "fourth_power_line": fourth_power_line,
     }
-    if amplitude_cv < 0.15 and frequency_cv > 0.8:
+    if amplitude_cv < CLASSICAL_THRESHOLDS["amplitude_cv_psk"] and frequency_cv > CLASSICAL_THRESHOLDS["frequency_cv_fsk"]:
         family, confidence = "FSK-like", min(1.0, 0.55 + frequency_cv / 4)
-    elif amplitude_cv < 0.2 and fourth_power_line > 0.2:
+    elif amplitude_cv < CLASSICAL_THRESHOLDS["amplitude_cv_qam"] and fourth_power_line > CLASSICAL_THRESHOLDS["fourth_power_psk"]:
         family, confidence = "PSK-like", min(1.0, 0.5 + fourth_power_line / 2)
-    elif amplitude_cv >= 0.2:
+    elif amplitude_cv >= CLASSICAL_THRESHOLDS["amplitude_cv_qam"]:
         family, confidence = "QAM-like", min(1.0, 0.45 + amplitude_cv / 2)
     else:
         family, confidence = "analog-like", 0.45

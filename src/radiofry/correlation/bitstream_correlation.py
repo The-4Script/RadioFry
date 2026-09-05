@@ -16,7 +16,8 @@ class CorrelationResult:
     sync_match_score: float = 0.0
 
 
-SYNC_LIBRARY = {"hdlc": "01111110", "ccsds": "0001101"}
+# CCSDS TM Synchronization and Channel Coding ASM, 0x1ACFFC1D.
+SYNC_LIBRARY = {"hdlc": "01111110", "ccsds": "00011010110011111111110000011101"}
 
 
 def _autocorrelation(values: np.ndarray) -> tuple[int | None, float]:

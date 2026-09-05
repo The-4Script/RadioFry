@@ -28,4 +28,4 @@ else:
     else:
         st.warning(result.get("message", "The decoder did not establish a successful recovery."))
     render_bit_preview(result.get("bits", []), "Decoded bitstream")
-    render_method_note("Method and limits", "A predicted FEC scheme is not the same as successful decoding. Convolutional, Reed-Solomon, and concatenated paths require compatible parameters; LDPC remains unavailable without code metadata.")
+    render_method_note("Method and limits", "A predicted FEC scheme is not the same as successful decoding. Convolutional, Reed-Solomon, and concatenated paths require compatible parameters; LDPC is classification-only until code metadata is supplied.")

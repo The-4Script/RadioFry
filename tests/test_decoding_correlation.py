@@ -1,8 +1,14 @@
 import numpy as np
+import pytest
 
 from radiofry.correlation.bitstream_correlation import correlate_bitstream
 from radiofry.decoding.demodulators.psk_demod import demodulate_psk
 from radiofry.decoding.demodulators.fsk_demod import demodulate_fsk
+from radiofry.decoding.demodulators.analog_demod import demodulate_ssb
+from radiofry.decoding.demodulators.dispatch import demodulate_capture
+from radiofry.decoding.demodulators import dispatch as dispatch_module
+from radiofry.contracts import UnifiedSignalContainer
+from radiofry.dsp.parameter_estimation import ParameterEstimate
 from radiofry.decoding.demodulators.qam_demod import demodulate_qam
 from radiofry.decoding.deinterleavers.block import block_deinterleave
 from radiofry.decoding.fec.rs_wrapper import decode_reed_solomon
@@ -49,6 +55,51 @@ def test_fsk_demodulator_recovers_frequency_signs() -> None:
     np.testing.assert_array_equal(result.bits, [1, 0, 1])
 
 
+def test_fsk_rejects_unsupported_orders() -> None:
+    with pytest.raises(ValueError, match="binary FSK"):
+        demodulate_fsk(np.ones(8, dtype=np.complex64), order=4)
+
+
+def test_ssb_uses_product_detector() -> None:
+    sample_rate = 8_000
+    time = np.arange(8_000) / sample_rate
+    audio = np.sin(2 * np.pi * 40 * time)
+    samples = np.exp(2j * np.pi * 500 * time) * audio
+
+    recovered = demodulate_ssb(samples, sample_rate, 500)
+
+    assert np.corrcoef(recovered[100:], audio[100:])[0, 1] > 0.9
+
+
+def test_dispatch_routes_ssb_and_reports_timing_search() -> None:
+    sample_rate = 8_000
+    time = np.arange(800) / sample_rate
+    audio = np.sin(2 * np.pi * 40 * time)
+    signal = UnifiedSignalContainer(np.exp(2j * np.pi * 500 * time) * audio, sample_rate)
+    parameters = ParameterEstimate(100.0, 20.0, 1_000.0, carrier_frequency_hz=500.0)
+
+    dispatched = demodulate_capture(signal, "AM-SSB", parameters)
+
+    assert dispatched.available
+    assert dispatched.result is not None
+    assert dispatched.result.modulation == "AM-SSB"
+    assert "coarse timing search" in dispatched.message
+
+
+def test_dispatch_keeps_dsb_and_ssb_demodulators_distinct(monkeypatch: pytest.MonkeyPatch) -> None:
+    signal = UnifiedSignalContainer(np.ones(32, dtype=np.complex64), 8_000)
+    parameters = ParameterEstimate(100.0, 20.0, 1_000.0, carrier_frequency_hz=500.0)
+    calls: list[str] = []
+
+    monkeypatch.setattr(dispatch_module, "demodulate_am", lambda samples: calls.append("dsb") or np.array([1.0], dtype=np.float32))
+    monkeypatch.setattr(dispatch_module, "demodulate_ssb", lambda samples, sample_rate, carrier: calls.append("ssb") or np.array([2.0], dtype=np.float32))
+
+    demodulate_capture(signal, "AM-DSB", parameters)
+    demodulate_capture(signal, "AM-SSB", parameters)
+
+    assert calls == ["dsb", "ssb"]
+
+
 def test_qam16_demodulator_returns_expected_bit_count() -> None:
     samples = np.array([-3 - 3j, -3 + 3j, 3 - 3j, 3 + 3j], dtype=np.complex64)
 
@@ -91,6 +142,16 @@ def test_correlation_finds_repeated_sync_word() -> None:
     assert result.period == 10
 
 
+def test_correlation_finds_ccsds_asm() -> None:
+    marker = "00011010110011111111110000011101"
+    bits = np.array([1, 0] + [int(bit) for bit in marker] + [1, 1], dtype=np.uint8)
+
+    result = correlate_bitstream(bits, sync_library={"ccsds": marker})
+
+    assert result.sync_pattern == "ccsds"
+    assert result.sync_positions == (2,)
+
+
 def test_decode_dispatch_preserves_bits_when_fec_is_none() -> None:
     bits = np.array([0, 1, 1, 0], dtype=np.uint8)
 
@@ -98,6 +159,13 @@ def test_decode_dispatch_preserves_bits_when_fec_is_none() -> None:
 
     assert result.success
     np.testing.assert_array_equal(result.bits, bits)
+
+
+def test_ldpc_is_explicitly_classification_only() -> None:
+    result = decode_fec(np.array([0, 1, 1, 0], dtype=np.uint8), "ldpc")
+
+    assert not result.success
+    assert "code parameters" in result.message
 
 
 def test_deinterleave_search_reports_pseudorandom_limitation() -> None:

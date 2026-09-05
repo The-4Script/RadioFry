@@ -66,8 +66,8 @@ if uploaded is not None:
             symbol_rate_input = st.number_input("Symbol rate override (Hz)", min_value=0.0, value=0.0, help="Leave at zero to use the estimator.")
             interleaver_choice = st.selectbox("Interleaver", ["Auto", "None", "Block", "Convolutional", "Diagonal", "Pseudo-random"])
         with control_right:
-            fec_choice = st.selectbox("FEC", ["Auto", "None", "Convolutional", "Reed-Solomon", "Concatenated", "LDPC"])
-            st.caption("Overrides are useful when sensor metadata or protocol documentation is available.")
+            fec_choice = st.selectbox("FEC", ["Auto", "None", "Convolutional", "Reed-Solomon", "Concatenated"])
+            st.caption("LDPC classification is reported for review, but decoding is not selectable without code metadata.")
 
     interleaver_override = interleaver_choice.lower().replace("-", "_") if interleaver_choice != "Auto" else None
     fec_override = fec_choice.lower().replace("-", "_") if fec_choice != "Auto" else None
@@ -118,9 +118,16 @@ if uploaded is not None:
         with download_left:
             st.download_button("Download JSON", report_json(report), "radiofry-report.json", "application/json", use_container_width=True)
         with download_right:
-            pdf_path = Path(tempfile.gettempdir()) / "radiofry-report.pdf"
-            build_pdf_report(report, str(pdf_path), signal)
-            st.download_button("Download PDF", pdf_path.read_bytes(), "radiofry-report.pdf", "application/pdf", use_container_width=True)
+            report_key = report.get("generated_at", "")
+            if st.session_state.get("pdf_report_key") != report_key:
+                st.session_state.pop("pdf_report_bytes", None)
+                st.session_state["pdf_report_key"] = report_key
+            if st.button("Prepare PDF", use_container_width=True):
+                pdf_path = Path(tempfile.gettempdir()) / "radiofry-report.pdf"
+                build_pdf_report(report, str(pdf_path), signal)
+                st.session_state["pdf_report_bytes"] = pdf_path.read_bytes()
+            if st.session_state.get("pdf_report_bytes"):
+                st.download_button("Download PDF", st.session_state["pdf_report_bytes"], "radiofry-report.pdf", "application/pdf", use_container_width=True)
 else:
     st.markdown("<div class='evidence-panel'><div class='evidence-label'>No capture selected</div><p>Choose a file above to unlock the evidence stages.</p></div>", unsafe_allow_html=True)
 
