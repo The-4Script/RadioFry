@@ -1,0 +1,11 @@
+.venv/
+.venv-wsl/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.radiofry_upload
+models_saved/*_smoke.pt
+data/synthetic/**/*.npy
+data/RML2016.10a_dict.pkl
+reports/*.png

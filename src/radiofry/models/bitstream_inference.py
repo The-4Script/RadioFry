@@ -1,0 +1,37 @@
+"""Inference helpers for feature-based interleaver and FEC classifiers."""
+
+from dataclasses import dataclass
+from pathlib import Path
+import pickle
+
+import numpy as np
+
+from radiofry.synthetic_gen.features import bit_features
+
+
+@dataclass(frozen=True)
+class BitstreamPrediction:
+    label: str
+    confidence: float
+    available: bool = True
+    message: str = ""
+
+
+def predict_bitstream(bits: np.ndarray, model_path: str | Path) -> BitstreamPrediction:
+    """Predict one label from a saved scikit-learn classifier."""
+
+    path = Path(model_path)
+    if not path.exists():
+        return BitstreamPrediction("unknown", 0.0, False, f"Classifier not found: {path}")
+    values = np.asarray(bits, dtype=np.uint8).ravel() & 1
+    if values.size == 0:
+        return BitstreamPrediction("unknown", 0.0, False, "No bits were available for classification.")
+    try:
+        with path.open("rb") as handle:
+            model = pickle.load(handle)
+        features = bit_features(values).reshape(1, -1)
+        label = str(model.predict(features)[0])
+        probabilities = model.predict_proba(features)[0] if hasattr(model, "predict_proba") else np.array([1.0])
+        return BitstreamPrediction(label, float(np.max(probabilities)))
+    except (OSError, pickle.PickleError, ValueError, AttributeError, IndexError) as error:
+        return BitstreamPrediction("unknown", 0.0, False, f"Classifier inference failed: {error}")
