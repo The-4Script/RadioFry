@@ -10,15 +10,13 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import streamlit as st
 
-from gui.theme import apply_radiofry_theme, render_method_note, render_sidebar, render_site_tour
+from gui.theme import apply_radiofry_theme, render_method_note, render_sidebar
 from radiofry.ingestion.iq_parser import IQFormat
 from radiofry.pipeline import DEFAULT_MAX_CAPTURE_BYTES, analyze_capture, load_capture
 from radiofry.reporting.report_builder import build_pdf_report, report_json
 
 
 st.set_page_config(page_title="RadioFry", page_icon="RF", layout="wide")
-st.session_state.setdefault("tour_open", True)
-st.session_state.setdefault("tour_step", 0)
 apply_radiofry_theme()
 render_sidebar(active_stage=0, has_analysis="report" in st.session_state)
 
@@ -36,10 +34,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-render_site_tour()
-
-st.subheader("Start an analysis")
-st.caption("Use a short baseband recording from an SDR or a documented synthetic capture. Music and sonified audio are useful only for testing the visual layer.")
+st.markdown("<div class='stage-kicker' style='margin-top:2rem;'>01 / Input</div><h2 style='margin-top:0.25rem;'>Start an analysis</h2><p class='stage-purpose'>Bring a baseband recording to the bench. RadioFry will preserve the assumptions behind every downstream result.</p>", unsafe_allow_html=True)
 
 uploaded = st.file_uploader("Choose a WAV or raw IQ capture", type=["wav", "iq"], label_visibility="visible")
 if uploaded is not None:
@@ -77,6 +72,7 @@ if uploaded is not None:
     interleaver_override = interleaver_choice.lower().replace("-", "_") if interleaver_choice != "Auto" else None
     fec_override = fec_choice.lower().replace("-", "_") if fec_choice != "Auto" else None
 
+    st.markdown("<div class='evidence-label' style='margin:1.5rem 0 0.6rem;'>Capture interpretation</div>", unsafe_allow_html=True)
     if uploaded.name.lower().endswith(".wav"):
         sample_rate = None
         iq_format = None

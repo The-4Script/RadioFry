@@ -2,131 +2,79 @@ import streamlit as st
 from streamlit.errors import StreamlitPageNotFoundError
 
 
-STAGES = [
-    ("01", "Upload & preview"),
-    ("02", "Signal parameters"),
-    ("03", "Modulation"),
-    ("04", "Demodulation"),
-    ("05", "Deinterleaving"),
-    ("06", "FEC decoding"),
-    ("07", "Correlation"),
-    ("08", "Report"),
-]
-
-TOUR_STEPS = [
-    {
-        "number": "01",
-        "eyebrow": "Start with the evidence",
-        "title": "Bring a signal to the bench",
-        "body": "Upload a short baseband WAV or raw IQ capture. RadioFry first checks the recording itself: format, sample count, waveform, and where energy sits in frequency.",
-        "action": "Choose a file on the home screen, then open Upload & Preview.",
-        "color": "teal",
-    },
-    {
-        "number": "02",
-        "eyebrow": "Measure before naming",
-        "title": "Read the signal conditions",
-        "body": "Bandwidth, SNR, and symbol-rate estimates describe the recording. They are useful measurements with assumptions, not a protocol verdict.",
-        "action": "Check unknown or suspicious values before trusting downstream stages.",
-        "color": "amber",
-    },
-    {
-        "number": "03",
-        "eyebrow": "Compare independent clues",
-        "title": "Treat modulation as a hypothesis",
-        "body": "A classical signal check and a CNN provide separate clues. Agreement strengthens the case; disagreement moves the result into review instead of hiding uncertainty.",
-        "action": "Compare the fused decision with the alternatives and constellation.",
-        "color": "blue",
-    },
-    {
-        "number": "04",
-        "eyebrow": "Follow the recovery chain",
-        "title": "Bits are a beginning, not proof",
-        "body": "Demodulation, deinterleaving, FEC, and correlation attempt to recover structure. Each stage tells you what it tried, what worked, and what still needs protocol context.",
-        "action": "Use the sidebar stages to inspect each handoff in order.",
-        "color": "violet",
-    },
-    {
-        "number": "05",
-        "eyebrow": "Finish with an audit trail",
-        "title": "Package the reasoning",
-        "body": "The final report keeps measurements, confidence, recovered bits, and limitations together. A strong result is one a jury can inspect, not just a label that sounds certain.",
-        "action": "Download JSON for traceability and PDF for the review room.",
-        "color": "orange",
-    },
-]
-
-
 def apply_radiofry_theme() -> None:
     st.markdown(
         """
         <style>
         :root {
-            --bg: #0a1014;
-            --bg-raised: #0f181e;
-            --surface: #131f27;
-            --surface-2: #182832;
-            --ink: #f1f6f5;
-            --muted: #9aadb2;
-            --line: #2a3b43;
-            --teal: #51d5c2;
-            --amber: #f1aa62;
-            --blue: #72b7ff;
-            --violet: #b49cff;
-            --orange: #ff825c;
-            --green: #67d391;
-            --red: #ff817b;
+            --bg: #0b1117;
+            --bg-raised: #111a22;
+            --surface: #16212a;
+            --surface-2: #1d2b35;
+            --ink: #f4f7f4;
+            --muted: #9eafb2;
+            --line: #2b3b44;
+            --teal: #67e0c8;
+            --amber: #f3bd73;
+            --blue: #8bbcff;
+            --violet: #c1b1ff;
+            --orange: #ff9675;
+            --green: #7be0a0;
+            --red: #ff918b;
         }
-        .stApp { background: var(--bg); color: var(--ink); }
-        [data-testid="stHeader"] { background: rgba(10,16,20,0.82); }
-        [data-testid="stSidebar"] { background: #0d171c; border-right: 1px solid var(--line); }
+        .stApp { background: radial-gradient(circle at 88% 0%, #1a2d35 0, transparent 31rem), var(--bg); color: var(--ink); }
+        [data-testid="stHeader"] { background: rgba(11,17,23,0.9); }
+        [data-testid="stSidebar"] { background: #0d151c; border-right: 1px solid var(--line); }
         [data-testid="stSidebar"] * { color: #eaf3f0; }
         [data-testid="stSidebar"] hr { border-color: var(--line); }
         [data-testid="stSidebarNav"] { display: none; }
         .stDeployButton, [data-testid="stAppDeployButton"] { display: none !important; }
-        .block-container { max-width: 1320px; padding-top: 2.5rem; padding-bottom: 4rem; }
-        h1, h2, h3, h4 { color: var(--ink); letter-spacing: 0; }
+        .block-container { max-width: 1400px; padding-top: 2.2rem; padding-bottom: 5rem; }
+        h1, h2, h3, h4 { color: var(--ink); font-family: "Trebuchet MS", "Segoe UI", sans-serif; letter-spacing: 0; }
+        h1 { font-weight: 700; }
+        h2 { margin-top: 2rem; }
         p, li, label { color: var(--ink); }
         [data-testid="stMetricValue"] { color: var(--ink); }
         [data-testid="stMetricLabel"] { color: var(--muted); }
         [data-testid="stMarkdownContainer"] a { color: var(--teal); }
-        .brand-mark { color: var(--teal); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }
+        .brand-mark { color: var(--teal); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }
         .stage-kicker { color: var(--teal); font-size: 0.74rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
         .stage-title { margin: 0.2rem 0 0.35rem; }
         .stage-purpose { color: var(--muted); font-size: 1.03rem; max-width: 780px; }
-        .stage-rule { border-bottom: 1px solid var(--line); margin: 0.85rem 0 1.6rem; }
+        .stage-rule { border-bottom: 1px solid var(--line); margin: 0.85rem 0 1.8rem; }
         .status-badge { display: inline-block; border-radius: 999px; padding: 0.3rem 0.68rem; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
         .status-ready { background: rgba(103,211,145,0.14); color: var(--green); border: 1px solid rgba(103,211,145,0.35); }
         .status-review { background: rgba(241,170,98,0.14); color: var(--amber); border: 1px solid rgba(241,170,98,0.35); }
         .status-muted { background: rgba(154,173,178,0.12); color: var(--muted); border: 1px solid rgba(154,173,178,0.28); }
         .status-error { background: rgba(255,129,123,0.14); color: var(--red); border: 1px solid rgba(255,129,123,0.35); }
-        .evidence-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1.1rem 1.2rem; margin-bottom: 1rem; box-shadow: 0 12px 30px rgba(0,0,0,0.12); }
+        .evidence-panel { background: rgba(22,33,42,0.88); border: 1px solid var(--line); border-radius: 6px; padding: 1.25rem 1.35rem; margin-bottom: 1rem; box-shadow: 0 14px 34px rgba(0,0,0,0.14); }
         .evidence-panel h3, .evidence-panel h4 { margin-top: 0; }
         .evidence-label { color: var(--muted); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
-        .hero-panel { background: linear-gradient(135deg, #142b32 0%, #17212e 54%, #2b2026 100%); border: 1px solid #31505a; border-radius: 14px; padding: 2.35rem 2.4rem 2.05rem; box-shadow: 0 22px 55px rgba(0,0,0,0.24); }
+        .hero-panel { background: linear-gradient(118deg, #18343a 0%, #15252f 62%, #36262b 100%); border: 1px solid #3c6266; border-radius: 8px; padding: 2.45rem 2.7rem 2.25rem; box-shadow: 0 22px 55px rgba(0,0,0,0.24); position: relative; overflow: hidden; }
+        .hero-panel::after { content: ""; position: absolute; width: 14rem; height: 14rem; border: 1px solid rgba(103,224,200,0.25); border-radius: 50%; right: -4rem; top: -5rem; box-shadow: 0 0 0 1.4rem rgba(103,224,200,0.04), 0 0 0 3rem rgba(103,224,200,0.025); }
         .hero-panel h1, .hero-panel h2, .hero-panel h3, .hero-panel p { color: var(--ink); }
-        .hero-panel h1 { font-size: 3rem; }
+        .hero-panel h1 { font-size: clamp(2.4rem, 5vw, 4.2rem); letter-spacing: -0.04em; }
         .hero-panel p { max-width: 820px; color: #c9d8d8; }
-        .sidebar-stage { border-left: 2px solid #2b3b42; margin: 0.25rem 0; padding: 0.4rem 0 0.4rem 0.75rem; }
-        .sidebar-stage.active { border-left-color: var(--teal); background: rgba(81,213,194,0.08); }
+        .sidebar-stage { border-left: 2px solid #2b3b42; margin: 0.18rem 0; padding: 0.48rem 0 0.48rem 0.75rem; }
+        .sidebar-stage.active { border-left-color: var(--teal); background: rgba(103,224,200,0.09); }
         .sidebar-stage-number { color: var(--teal); font-size: 0.68rem; font-weight: 800; }
         .sidebar-stage-name { font-size: 0.86rem; }
         .portal-link { align-items: center; border-radius: 6px; color: #dce9e6 !important; display: flex; font-size: 0.86rem; gap: 0.55rem; padding: 0.35rem 0.45rem; text-decoration: none !important; }
         .portal-link:hover { background: rgba(81,213,194,0.1); color: var(--teal) !important; }
-        .tour-shell { background: #111d24; border: 1px solid #33515a; border-radius: 14px; padding: 1.2rem 1.35rem 1.1rem; box-shadow: 0 18px 42px rgba(0,0,0,0.2); }
-        .tour-kicker { color: var(--teal); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
-        .tour-title { color: var(--ink); font-size: 1.6rem; font-weight: 750; margin: 0.35rem 0 0.5rem; }
-        .tour-body { color: #c5d2d3; font-size: 1rem; line-height: 1.6; max-width: 780px; }
-        .tour-action { border-left: 3px solid var(--amber); color: #f0c38d; margin-top: 1rem; padding: 0.45rem 0 0.45rem 0.8rem; }
-        .tour-dot { display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 50%; margin-right: 0.35rem; }
-        .tour-teal { background: var(--teal); } .tour-amber { background: var(--amber); } .tour-blue { background: var(--blue); } .tour-violet { background: var(--violet); } .tour-orange { background: var(--orange); }
-        .tour-closed { align-items: center; background: #111d24; border: 1px solid var(--line); border-radius: 10px; display: flex; gap: 0.8rem; justify-content: space-between; padding: 0.75rem 1rem; }
-        .bit-preview { background: #091014; border: 1px solid #2b424a; border-radius: 7px; color: #ccefe5; font-family: "Cascadia Mono", Consolas, monospace; font-size: 0.78rem; line-height: 1.6; overflow-wrap: anywhere; padding: 0.85rem; }
-        .stAlert { border-radius: 8px; }
-        .stButton > button { border-radius: 7px; }
+        .bit-preview { background: #091014; border: 1px solid #2b424a; border-radius: 4px; color: #ccefe5; font-family: "Cascadia Mono", Consolas, monospace; font-size: 0.78rem; line-height: 1.6; overflow-wrap: anywhere; padding: 0.85rem; }
+        .stAlert { border-radius: 5px; }
+        .stButton > button { border-radius: 5px; min-height: 2.55rem; }
         .stButton > button[kind="primary"] { background: var(--teal); border-color: var(--teal); color: #071113; font-weight: 750; }
         .stButton > button[kind="primary"]:hover { background: #83e3d2; border-color: #83e3d2; }
-        [data-testid="stExpander"] { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; }
+        [data-testid="stFileUploader"] { background: rgba(22,33,42,0.75); border: 1px dashed #46616a; border-radius: 6px; padding: 0.35rem; }
+        [data-testid="stFileUploader"] section { border: 0; background: transparent; }
+        [data-testid="stExpander"] { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+        [data-testid="stMetric"] { background: rgba(22,33,42,0.7); border-left: 2px solid var(--teal); padding: 0.8rem 1rem; }
+        @media (max-width: 700px) {
+            .block-container { padding: 1.2rem 1rem 3rem; }
+            .hero-panel { padding: 1.7rem 1.35rem; }
+            .hero-panel h1 { font-size: 2.7rem; }
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -164,6 +112,7 @@ def render_bit_preview(bits: object, label: str = "Bit preview", limit: int = 51
 
 
 def render_sidebar(active_stage: int, has_analysis: bool) -> None:
+    del active_stage, has_analysis
     with st.sidebar:
         st.markdown("<div class='brand-mark'>RadioFry / SIH26147</div>", unsafe_allow_html=True)
         st.markdown("### Analysis bench")
@@ -186,62 +135,8 @@ def render_sidebar(active_stage: int, has_analysis: bool) -> None:
                 st.page_link(page, label=label)
             except StreamlitPageNotFoundError:
                 st.markdown(f"<a class='portal-link' href='{href}'><span>{icon}</span><span>{label}</span></a>", unsafe_allow_html=True)
-        st.divider()
-        st.markdown("<div class='evidence-label'>Progress</div>", unsafe_allow_html=True)
-        for index, (number, name) in enumerate(STAGES, start=1):
-            active_class = " active" if index == active_stage else ""
-            marker = "●" if has_analysis and index <= active_stage else "○"
-            st.markdown(f"<div class='sidebar-stage{active_class}'><span class='sidebar-stage-number'>{number} &nbsp; {marker}</span><br><span class='sidebar-stage-name'>{name}</span></div>", unsafe_allow_html=True)
-        st.divider()
-        if st.button("Open site tour", use_container_width=True):
-            st.session_state["tour_open"] = True
-            st.session_state["tour_step"] = 0
-            st.rerun()
-        st.caption("A quick guided walk through the workflow for juries and first-time reviewers.")
 
 
 def render_page_shell(active_stage: int) -> None:
     apply_radiofry_theme()
     render_sidebar(active_stage=active_stage, has_analysis="report" in st.session_state)
-
-
-def render_site_tour() -> None:
-    if not st.session_state.get("tour_open", True):
-        st.markdown("<div class='tour-closed'><span><strong>Site tour paused</strong><br><span style='color:#9aadb2'>Walk through the workflow block by block.</span></span></div>", unsafe_allow_html=True)
-        if st.button("Start site tour", type="primary", use_container_width=True):
-            st.session_state["tour_open"] = True
-            st.session_state["tour_step"] = 0
-            st.rerun()
-        return
-
-    step_index = max(0, min(st.session_state.get("tour_step", 0), len(TOUR_STEPS) - 1))
-    step = TOUR_STEPS[step_index]
-    st.progress((step_index + 1) / len(TOUR_STEPS), text=f"Site tour  {step_index + 1} of {len(TOUR_STEPS)}")
-    st.markdown(
-        f"""
-        <div class="tour-shell">
-            <div class="tour-kicker"><span class="tour-dot tour-{step['color']}"></span>{step['eyebrow']}</div>
-            <div class="tour-title">{step['number']} / {step['title']}</div>
-            <div class="tour-body">{step['body']}</div>
-            <div class="tour-action"><strong>Try this:</strong> {step['action']}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    back, close, forward = st.columns([1, 1, 1])
-    with back:
-        if st.button("Back", disabled=step_index == 0, use_container_width=True):
-            st.session_state["tour_step"] = step_index - 1
-            st.rerun()
-    with close:
-        if st.button("Skip tour", use_container_width=True):
-            st.session_state["tour_open"] = False
-            st.rerun()
-    with forward:
-        label = "Finish" if step_index == len(TOUR_STEPS) - 1 else "Next"
-        if st.button(label, type="primary", use_container_width=True):
-            if step_index == len(TOUR_STEPS) - 1:
-                st.session_state["tour_open"] = False
-            else:
-                st.session_state["tour_step"] = step_index + 1
-            st.rerun()
