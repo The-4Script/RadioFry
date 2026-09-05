@@ -1,4 +1,5 @@
 import json
+import h5py
 
 import numpy as np
 import pytest
@@ -8,6 +9,7 @@ torch = pytest.importorskip("torch")
 import radiofry.pipeline as pipeline
 from radiofry.models.modulation_cnn import ModulationCNN
 from radiofry.reporting.report_builder import build_pdf_report, build_report, report_json
+from radiofry.training.train_modulation import load_rml_dataset
 
 
 def test_modulation_cnn_output_shape() -> None:
@@ -37,6 +39,21 @@ def test_pdf_report_is_generated(tmp_path) -> None:
     build_pdf_report(build_report(source={"format": "test"}, stages={}), str(output))
 
     assert output.read_bytes().startswith(b"%PDF")
+
+
+def test_rml_hdf5_loader_reads_iq_labels_and_snrs(tmp_path) -> None:
+    path = tmp_path / "mini-rml.h5"
+    with h5py.File(path, "w") as handle:
+        handle["X"] = np.zeros((4, 2, 16), dtype=np.float32)
+        handle["Y"] = np.array([b"BPSK", b"QPSK", b"BPSK", b"QPSK"])
+        handle["Z"] = np.array([-10, 0, 10, 18])
+
+    frames, targets, snrs, labels = load_rml_dataset(path, max_samples=4)
+
+    assert frames.shape == (4, 2, 16)
+    assert targets.tolist() == [0, 1, 0, 1]
+    assert snrs.tolist() == [-10, 0, 10, 18]
+    assert labels == ["BPSK", "QPSK"]
 
 
 def test_pipeline_classifies_fec_after_deinterleaving(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -17,8 +17,11 @@ pytest
 ```
 
 Optional ML, GUI, and FEC dependencies can be installed with `.[ml,gui,fec]`.
-The RML2016.10a dataset is intentionally not bundled. Place it at
-`data/RML2016.10a_dict.pkl` before running the modulation training command.
+RML2016.10a is already supported at `data/RML2016.10a_dict.pkl`. RML2018.01A
+is also supported directly in its original HDF5 form; place the extracted file
+at `data/RML2018.01A.h5` (or pass another `.h5` path to `--data`). Do not
+convert it to pickle: the trainer uses bounded stratified reads so a 2-million
+example archive does not need to be loaded entirely into RAM.
 
 For NVIDIA GPU training on Windows, install the CUDA wheel after the base
 requirements because the default PyPI Torch package may be CPU-only:
@@ -28,6 +31,19 @@ requirements because the default PyPI Torch package may be CPU-only:
 $env:PYTHONPATH = "src"
 & .venv/Scripts/python.exe -m radiofry.training.train_modulation --device cuda
 ```
+
+For RML2018 on the RTX 3050, start with a bounded, reproducible run and inspect
+its metrics before increasing the sample count:
+
+```powershell
+$env:PYTHONPATH = "src"
+& .venv/Scripts/python.exe -m radiofry.training.train_modulation --data data/RML2018.01A.h5 --output models_saved/modulation_cnn_rml2018.pt --max-samples 100000 --epochs 30 --batch-size 64 --device cuda
+```
+
+The RML2018 HDF5 loader expects the standard `X`, `Y`, and `Z` datasets: signal
+data, modulation labels (one-hot or categorical), and SNR. If the archive
+contains class-name metadata it is preserved; otherwise class indices remain
+explicitly named `0`, `1`, and so on rather than being guessed.
 
 The trainer selects CUDA automatically when available and falls back to CPU;
 `--device cuda` makes a missing CUDA installation fail explicitly.

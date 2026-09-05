@@ -26,10 +26,27 @@ def main() -> None:
     print(json.dumps(metrics, indent=2))
 
 
-def load_rml_dataset(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]:
-    """Load the documented RML dictionary into arrays without importing Torch."""
+def _stratified_indices(targets: np.ndarray, snrs: np.ndarray, limit: int, seed: int) -> np.ndarray:
+    keys = np.array([f"{target}:{snr}" for target, snr in zip(targets, snrs)])
+    groups = {key: np.flatnonzero(keys == key) for key in np.unique(keys)}
+    if limit < len(groups):
+        raise ValueError(f"max_samples must be at least the number of modulation/SNR strata ({len(groups)})")
+    generator = np.random.default_rng(seed)
+    base, remainder = divmod(limit, len(groups))
+    selected = []
+    for index, group in enumerate(groups.values()):
+        count = min(len(group), base + (index < remainder))
+        selected.append(generator.choice(group, size=count, replace=False))
+    return np.sort(np.concatenate(selected))
 
-    with Path(path).open("rb") as handle:
+
+def load_rml_dataset(path: str | Path, *, max_samples: int | None = None, seed: int = 7) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]:
+    """Load RML2016 pickle or RML2018 HDF5 data into canonical I/Q arrays."""
+
+    path = Path(path)
+    if path.suffix.lower() in {".h5", ".hdf5"}:
+        return _load_rml_hdf5(path, max_samples=max_samples, seed=seed)
+    with path.open("rb") as handle:
         dataset = pickle.load(handle, encoding="latin1")
     labels = sorted({modulation for modulation, _ in dataset})
     label_index = {label: index for index, label in enumerate(labels)}
@@ -39,6 +56,61 @@ def load_rml_dataset(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarr
         targets.extend([label_index[modulation]] * len(values))
         snrs.extend([int(snr)] * len(values))
     return np.concatenate(frames), np.asarray(targets, dtype=np.int64), np.asarray(snrs, dtype=np.int64), labels
+
+
+def _load_rml_hdf5(path: Path, *, max_samples: int | None = None, seed: int = 7) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]:
+    """Load common RML2018 HDF5 layouts without loading duplicate arrays."""
+
+    try:
+        import h5py
+    except ImportError as error:
+        raise RuntimeError("h5py is required to load RML2018 HDF5 data") from error
+    with h5py.File(path, "r") as handle:
+        keys = set(handle.keys())
+        data_key = next((key for key in ("X", "x", "data", "signals") if key in keys), None)
+        label_key = next((key for key in ("Y", "y", "labels", "label") if key in keys), None)
+        snr_key = next((key for key in ("Z", "z", "snr", "snrs", "SNR") if key in keys), None)
+        if data_key is None or label_key is None or snr_key is None:
+            raise ValueError(f"RML HDF5 must contain data, labels, and SNR datasets; found {sorted(keys)}")
+        raw_labels = np.asarray(handle[label_key])
+        raw_snrs = np.asarray(handle[snr_key]).reshape(-1)
+        data_shape = handle[data_key].shape
+        class_names_attr = handle[label_key].attrs.get("class_names", handle.attrs.get("class_names", None))
+        class_names = None if class_names_attr is None else [str(value.decode() if isinstance(value, bytes) else value) for value in np.asarray(class_names_attr).reshape(-1)]
+        label_indices, inferred_names = _hdf5_label_indices(raw_labels)
+        if class_names is None:
+            class_names = inferred_names
+        selected = _stratified_indices(label_indices, raw_snrs, min(max_samples, len(raw_snrs)) if max_samples is not None else len(raw_snrs), seed) if max_samples is not None else np.arange(len(raw_snrs))
+        raw_data = np.asarray(handle[data_key][selected])
+    if raw_data.ndim not in {2, 3}:
+        raise ValueError(f"RML HDF5 data must be 2- or 3-dimensional, got shape {raw_data.shape}")
+    label_indices = label_indices[selected]
+    raw_snrs = raw_snrs[selected]
+    if np.iscomplexobj(raw_data):
+        if raw_data.ndim == 2:
+            frames = np.stack([raw_data.real, raw_data.imag], axis=1)
+        elif raw_data.shape[1] == 1:
+            frames = np.stack([raw_data[:, 0].real, raw_data[:, 0].imag], axis=1)
+        else:
+            frames = raw_data
+    elif raw_data.shape[1] == 2:
+        frames = raw_data
+    elif raw_data.shape[-1] == 2:
+        frames = np.moveaxis(raw_data, -1, 1)
+    else:
+        raise ValueError(f"RML HDF5 data must contain I/Q channels, got shape {raw_data.shape}")
+    if len(frames) != len(label_indices) or len(frames) != len(raw_snrs):
+        raise ValueError("RML HDF5 data, labels, and SNR arrays must have matching sample counts")
+    return np.asarray(frames, dtype=np.float32), np.asarray(label_indices, dtype=np.int64), np.asarray(raw_snrs, dtype=np.int64), class_names
+
+
+def _hdf5_label_indices(labels: np.ndarray) -> tuple[np.ndarray, list[str]]:
+    if labels.ndim > 1 and labels.shape[-1] > 1:
+        return np.argmax(labels, axis=-1).astype(np.int64), [str(index) for index in range(labels.shape[-1])]
+    values = labels.reshape(-1)
+    names = sorted({str(value.decode() if isinstance(value, bytes) else value) for value in values})
+    mapping = {name: index for index, name in enumerate(names)}
+    return np.asarray([mapping[str(value.decode() if isinstance(value, bytes) else value)] for value in values], dtype=np.int64), names
 
 
 def train_modulation(
@@ -66,9 +138,9 @@ def train_modulation(
         raise RuntimeError("CUDA was requested but is not available in this PyTorch environment")
     if selected_device.type == "cuda":
         torch.cuda.manual_seed_all(seed)
-    frames, targets, snrs, labels = load_rml_dataset(data_path)
+    frames, targets, snrs, labels = load_rml_dataset(data_path, max_samples=max_samples, seed=seed)
     stratify_key = np.array([f"{target}:{snr}" for target, snr in zip(targets, snrs)])
-    if max_samples is not None:
+    if max_samples is not None and Path(data_path).suffix.lower() not in {".h5", ".hdf5"}:
         if max_samples < len(labels) * 3:
             raise ValueError("max_samples is too small to represent every class")
         selected, _ = train_test_split(
