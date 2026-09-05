@@ -10,14 +10,15 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import streamlit as st
 
-from gui.theme import apply_radiofry_theme, render_method_note, render_sidebar, render_tutorial
+from gui.theme import apply_radiofry_theme, render_method_note, render_sidebar, render_site_tour
 from radiofry.ingestion.iq_parser import IQFormat
 from radiofry.pipeline import DEFAULT_MAX_CAPTURE_BYTES, analyze_capture, load_capture
 from radiofry.reporting.report_builder import build_pdf_report, report_json
 
 
 st.set_page_config(page_title="RadioFry", page_icon="RF", layout="wide")
-st.session_state.setdefault("show_tutorial", True)
+st.session_state.setdefault("tour_open", True)
+st.session_state.setdefault("tour_step", 0)
 apply_radiofry_theme()
 render_sidebar(active_stage=0, has_analysis="report" in st.session_state)
 
@@ -35,7 +36,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-render_tutorial()
+render_site_tour()
 
 st.subheader("Start an analysis")
 st.caption("Use a short baseband recording from an SDR or a documented synthetic capture. Music and sonified audio are useful only for testing the visual layer.")
