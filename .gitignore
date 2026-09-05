@@ -8,4 +8,6 @@ __pycache__/
 models_saved/*_smoke.pt
 data/synthetic/**/*.npy
 data/RML2016.10a_dict.pkl
+data/2018.01/
+.radiofry_upload.*
 reports/*.png

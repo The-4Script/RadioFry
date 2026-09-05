@@ -56,6 +56,21 @@ def test_rml_hdf5_loader_reads_iq_labels_and_snrs(tmp_path) -> None:
     assert labels == ["BPSK", "QPSK"]
 
 
+def test_rml_hdf5_loader_reads_official_sibling_class_names(tmp_path) -> None:
+    path = tmp_path / "signals.h5"
+    path.write_bytes(b"")
+    path.unlink()
+    with h5py.File(path, "w") as handle:
+        handle["X"] = np.zeros((2, 8, 2), dtype=np.float32)
+        handle["Y"] = np.eye(2, dtype=np.int64)
+        handle["Z"] = np.array([[0], [10]])
+    (tmp_path / "classes.txt").write_text("classes = ['BPSK', 'QPSK']", encoding="utf-8")
+
+    _, _, _, labels = load_rml_dataset(path, max_samples=2)
+
+    assert labels == ["BPSK", "QPSK"]
+
+
 def test_pipeline_classifies_fec_after_deinterleaving(monkeypatch: pytest.MonkeyPatch) -> None:
     class DummyPrediction:
         available = True

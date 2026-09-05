@@ -43,7 +43,7 @@ def predict_modulation(signal: UnifiedSignalContainer, checkpoint_path: str | Pa
         model = ModulationCNN(int(payload.get("input_channels", 2)), len(labels))
         model.load_state_dict(payload["state_dict"])
         model.eval()
-        inputs = torch.from_numpy(_fixed_iq(signal, 128)).unsqueeze(0)
+        inputs = torch.from_numpy(_fixed_iq(signal, int(payload.get("sample_length", 128)))).unsqueeze(0)
         with torch.inference_mode():
             probabilities = torch.softmax(model(inputs), dim=1)[0].numpy()
         indices = np.argsort(probabilities)[::-1][:top_k]

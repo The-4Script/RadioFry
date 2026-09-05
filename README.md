@@ -19,7 +19,7 @@ pytest
 Optional ML, GUI, and FEC dependencies can be installed with `.[ml,gui,fec]`.
 RML2016.10a is already supported at `data/RML2016.10a_dict.pkl`. RML2018.01A
 is also supported directly in its original HDF5 form; place the extracted file
-at `data/RML2018.01A.h5` (or pass another `.h5` path to `--data`). Do not
+at `data/2018.01/GOLD_XYZ_OSC.0001_1024.hdf5` (or pass another `.h5` path to `--data`). Do not
 convert it to pickle: the trainer uses bounded stratified reads so a 2-million
 example archive does not need to be loaded entirely into RAM.
 
@@ -44,6 +44,13 @@ The RML2018 HDF5 loader expects the standard `X`, `Y`, and `Z` datasets: signal
 data, modulation labels (one-hot or categorical), and SNR. If the archive
 contains class-name metadata it is preserved; otherwise class indices remain
 explicitly named `0`, `1`, and so on rather than being guessed.
+
+Training output contains learned weights and biases in the `.pt` checkpoint;
+the optimizer state and raw training data are not required for inference. The
+trainer replaces the target checkpoint atomically only when validation loss
+improves, so an interrupted run leaves the previous best model usable. Keep
+the dataset locally for reproducibility and auditability, but it is excluded
+from Git and is not needed by the hosted inference app.
 
 The trainer selects CUDA automatically when available and falls back to CPU;
 `--device cuda` makes a missing CUDA installation fail explicitly.
