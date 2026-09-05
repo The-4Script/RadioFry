@@ -38,12 +38,15 @@ def predict_modulation(signal: UnifiedSignalContainer, checkpoint_path: str | Pa
     try:
         import torch
         from radiofry.models.modulation_cnn import ModulationCNN
+        from radiofry.models.signal_features import add_signal_features
         payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
         labels = list(payload["labels"])
         model = ModulationCNN(int(payload.get("input_channels", 2)), len(labels))
         model.load_state_dict(payload["state_dict"])
         model.eval()
-        inputs = torch.from_numpy(_fixed_iq(signal, int(payload.get("sample_length", 128)))).unsqueeze(0)
+        inputs = _fixed_iq(signal, int(payload.get("sample_length", 128)))
+        inputs = add_signal_features(inputs, include_engineered=payload.get("features", "iq") == "iqap")
+        inputs = torch.from_numpy(inputs).unsqueeze(0)
         with torch.inference_mode():
             probabilities = torch.softmax(model(inputs), dim=1)[0].numpy()
         indices = np.argsort(probabilities)[::-1][:top_k]

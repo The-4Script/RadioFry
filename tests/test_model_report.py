@@ -8,6 +8,7 @@ torch = pytest.importorskip("torch")
 
 import radiofry.pipeline as pipeline
 from radiofry.models.modulation_cnn import ModulationCNN
+from radiofry.models.signal_features import add_signal_features
 from radiofry.reporting.report_builder import build_pdf_report, build_report, report_json
 from radiofry.training.train_modulation import load_rml_dataset
 
@@ -17,6 +18,13 @@ def test_modulation_cnn_output_shape() -> None:
     output = model(torch.zeros(4, 2, 128))
 
     assert output.shape == (4, 11)
+
+
+def test_engineered_signal_features_have_four_channels() -> None:
+    features = add_signal_features(np.ones((2, 128), dtype=np.float32), include_engineered=True)
+
+    assert features.shape == (4, 128)
+    assert np.isfinite(features).all()
 
 
 def test_report_serializes_dataclasses_and_numpy_values() -> None:

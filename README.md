@@ -110,6 +110,11 @@ short WAV containing complex I/Q in two channels, or a headerless interleaved
 IQ file with documented dtype, byte order, sample rate, modulation, and (when
 available) symbol rate. A 5-30 second capture is enough for a demo.
 
+Phase 2 can add amplitude and phase-difference channels with
+`--features iqap`. HDF5 batches are streamed from disk and engineered
+features are computed per batch, so larger experiments do not duplicate the
+full dataset in memory. The current production checkpoint is promoted only
+after a candidate beats its held-out accuracy and high-SNR accuracy.
 The repository's synthetic generators and the RML2016.10a benchmark are the
 recommended reproducible sources. Public GNU Radio examples and documented
 SDR datasets are also suitable when they preserve baseband samples. Normal

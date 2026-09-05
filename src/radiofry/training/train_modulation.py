@@ -24,8 +24,9 @@ def main() -> None:
     parser.add_argument("--device", choices=["cpu", "cuda"], default=None)
     parser.add_argument("--sample-length", type=int, default=128, help="Training frame length; use 1024 for native RML2018 frames.")
     parser.add_argument("--quiet", action="store_true", help="Disable epoch progress output.")
+    parser.add_argument("--features", choices=["iq", "iqap"], default="iq", help="Input channels: I/Q or I/Q/amplitude/phase-difference.")
     args = parser.parse_args()
-    metrics = train_modulation(args.data, args.output, epochs=args.epochs, batch_size=args.batch_size, max_samples=args.max_samples, patience=args.patience, device=args.device, sample_length=args.sample_length, verbose=not args.quiet)
+    metrics = train_modulation(args.data, args.output, epochs=args.epochs, batch_size=args.batch_size, max_samples=args.max_samples, patience=args.patience, device=args.device, sample_length=args.sample_length, verbose=not args.quiet, features=args.features)
     print(json.dumps(metrics, indent=2))
 
 
@@ -142,6 +143,58 @@ def _read_class_names(path: Path, count: int) -> list[str] | None:
     return None
 
 
+def _hdf5_metadata(path: Path) -> tuple[np.ndarray, np.ndarray, list[str], tuple[int, ...], str]:
+    import h5py
+
+    with h5py.File(path, "r") as handle:
+        data_key = next((key for key in ("X", "x", "data", "signals") if key in handle), None)
+        label_key = next((key for key in ("Y", "y", "labels", "label") if key in handle), None)
+        snr_key = next((key for key in ("Z", "z", "snr", "snrs", "SNR") if key in handle), None)
+        if data_key is None or label_key is None or snr_key is None:
+            raise ValueError("RML HDF5 must contain X, Y, and Z datasets")
+        raw_labels = np.asarray(handle[label_key])
+        snrs = np.asarray(handle[snr_key]).reshape(-1).astype(np.int64)
+        targets, inferred_names = _hdf5_label_indices(raw_labels)
+        labels = _read_class_names(path, len(inferred_names)) or inferred_names
+        return targets, snrs, labels, tuple(handle[data_key].shape), data_key
+
+
+class _HDF5Frames:
+    def __init__(self, path: Path, indices: np.ndarray, sample_length: int | None, features: str) -> None:
+        self.path, self.indices, self.sample_length, self.features = path, np.asarray(indices), sample_length, features
+        self._handle = None
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
+    def __getitem__(self, index: int):
+        return self.__getitems__([index])[0]
+
+    def __getitems__(self, indices: list[int]):
+        from radiofry.models.signal_features import add_signal_features_batch
+        if self._handle is None:
+            import h5py
+            self._handle = h5py.File(self.path, "r")
+        local_indices = np.asarray(indices, dtype=np.int64)
+        global_indices = self.indices[local_indices]
+        order = np.argsort(global_indices)
+        frames = np.asarray(self._handle["X"][global_indices[order]])
+        frames = np.take(frames, np.argsort(order), axis=0)
+        if np.iscomplexobj(frames):
+            frames = np.stack((frames.real, frames.imag), axis=1)
+        elif frames.shape[-1] == 2:
+            frames = np.moveaxis(frames, -1, 1)
+        if self.sample_length is not None and frames.shape[2] != self.sample_length:
+            positions = np.linspace(0, frames.shape[2] - 1, self.sample_length).round().astype(np.int64)
+            frames = frames[:, :, positions]
+        frames = add_signal_features_batch(frames.astype(np.float32), include_engineered=self.features == "iqap")
+        import torch
+        return [(torch.from_numpy(frame), int(self._targets[index])) for frame, index in zip(frames, local_indices)]
+
+    def set_targets(self, targets: np.ndarray) -> None:
+        self._targets = targets
+
+
 def train_modulation(
     data_path: str | Path,
     output_path: str | Path,
@@ -154,6 +207,7 @@ def train_modulation(
     device: str | None = None,
     sample_length: int | None = 128,
     verbose: bool = True,
+    features: str = "iq",
 ) -> dict[str, Any]:
     """Train, evaluate, and save the modulation CNN and its metrics."""
 
@@ -162,6 +216,7 @@ def train_modulation(
     from torch.utils.data import DataLoader, TensorDataset
     from sklearn.model_selection import train_test_split
     from radiofry.models.modulation_cnn import ModulationCNN
+    from radiofry.models.signal_features import add_signal_features_batch
 
     torch.manual_seed(seed)
     selected_device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
@@ -169,10 +224,22 @@ def train_modulation(
         raise RuntimeError("CUDA was requested but is not available in this PyTorch environment")
     if selected_device.type == "cuda":
         torch.cuda.manual_seed_all(seed)
-    frames, targets, snrs, labels = load_rml_dataset(data_path, max_samples=max_samples, seed=seed)
-    frames = _canonicalize_frames(frames, sample_length) if sample_length is not None else frames
+    include_engineered = features == "iqap"
+    if features not in {"iq", "iqap"}:
+        raise ValueError("features must be 'iq' or 'iqap'")
+    is_hdf5 = Path(data_path).suffix.lower() in {".h5", ".hdf5"}
+    if is_hdf5:
+        targets, snrs, labels, source_shape, _ = _hdf5_metadata(Path(data_path))
+        selected = _stratified_indices(targets, snrs, min(max_samples, len(targets)) if max_samples is not None else len(targets), seed) if max_samples is not None else np.arange(len(targets))
+        targets, snrs = targets[selected], snrs[selected]
+        source_indices = selected
+        frames = np.zeros((1, 2, sample_length or source_shape[1]), dtype=np.float32)
+    else:
+        frames, targets, snrs, labels = load_rml_dataset(data_path, max_samples=max_samples, seed=seed)
+        frames = _canonicalize_frames(frames, sample_length) if sample_length is not None else frames
+        frames = add_signal_features_batch(frames, include_engineered=include_engineered)
     stratify_key = np.array([f"{target}:{snr}" for target, snr in zip(targets, snrs)])
-    if max_samples is not None and Path(data_path).suffix.lower() not in {".h5", ".hdf5"}:
+    if max_samples is not None and not is_hdf5:
         if max_samples < len(labels) * 3:
             raise ValueError("max_samples is too small to represent every class")
         selected, _ = train_test_split(
@@ -186,9 +253,15 @@ def train_modulation(
     train_idx, remainder_idx = train_test_split(np.arange(len(targets)), test_size=0.30, random_state=seed, stratify=stratify_key)
     remainder_key = stratify_key[remainder_idx]
     val_idx, test_idx = train_test_split(remainder_idx, test_size=0.50, random_state=seed, stratify=remainder_key)
-    make_loader = lambda indices, shuffle: DataLoader(TensorDataset(torch.from_numpy(frames[indices]), torch.from_numpy(targets[indices])), batch_size=batch_size, shuffle=shuffle, pin_memory=selected_device.type == "cuda")
+    if is_hdf5:
+        stream = _HDF5Frames(Path(data_path), source_indices, sample_length, features)
+        stream.set_targets(targets)
+        make_loader = lambda indices, shuffle: DataLoader(torch.utils.data.Subset(stream, indices), batch_size=batch_size, shuffle=shuffle, pin_memory=selected_device.type == "cuda", num_workers=0)
+    else:
+        make_loader = lambda indices, shuffle: DataLoader(TensorDataset(torch.from_numpy(frames[indices]), torch.from_numpy(targets[indices])), batch_size=batch_size, shuffle=shuffle, pin_memory=selected_device.type == "cuda")
     train_loader, val_loader = make_loader(train_idx, True), make_loader(val_idx, False)
-    model = ModulationCNN(input_channels=frames.shape[1], num_classes=len(labels)).to(selected_device)
+    input_channels = 4 if include_engineered else 2
+    model = ModulationCNN(input_channels=input_channels, num_classes=len(labels)).to(selected_device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", patience=2, factor=0.5)
     loss_fn = nn.CrossEntropyLoss()
@@ -226,7 +299,7 @@ def train_modulation(
         if validation_loss < best_loss:
             best_loss, stale_epochs = validation_loss, 0
             best_state = {key: value.detach().clone() for key, value in model.state_dict().items()}
-            checkpoint = {"state_dict": best_state, "labels": labels, "input_channels": frames.shape[1], "sample_length": frames.shape[2], "dataset": str(data_path), "seed": seed, "best_epoch": epoch, "best_validation_loss": best_loss}
+            checkpoint = {"state_dict": best_state, "labels": labels, "input_channels": input_channels, "sample_length": sample_length or frames.shape[2], "features": features, "dataset": str(data_path), "seed": seed, "best_epoch": epoch, "best_validation_loss": best_loss}
             temporary_output = output.with_suffix(output.suffix + ".tmp")
             torch.save(checkpoint, temporary_output)
             temporary_output.replace(output)
@@ -261,7 +334,7 @@ def train_modulation(
     accuracy_by_snr = {str(int(snr)): float(np.mean(predictions[test_snrs == snr] == test_targets[test_snrs == snr])) for snr in sorted(set(test_snrs))}
     metrics_path = output.with_name(f"{output.stem}_metrics.json")
     metrics = {
-        "samples": int(len(targets)), "classes": labels, "epochs_completed": completed_epochs, "device": str(selected_device), "dataset": str(data_path), "sample_length": int(frames.shape[2]), "seed": seed, "best_validation_loss": best_loss,
+        "samples": int(len(targets)), "classes": labels, "epochs_completed": completed_epochs, "device": str(selected_device), "dataset": str(data_path), "sample_length": int(sample_length or frames.shape[2]), "features": features, "seed": seed, "best_validation_loss": best_loss,
         "test_accuracy": float(np.mean(predictions == test_targets)),
         "accuracy_by_snr": accuracy_by_snr, "confusion_matrices": confusion,
         "split_sizes": {"train": len(train_idx), "validation": len(val_idx), "test": len(test_idx)},
