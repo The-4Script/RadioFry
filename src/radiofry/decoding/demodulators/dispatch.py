@@ -52,7 +52,8 @@ def demodulate_capture(
             if modulation == "WBFM":
                 analog = demodulate_fm(symbol_samples)
             elif modulation == "AM-SSB":
-                analog = demodulate_ssb(symbol_samples, signal.sample_rate, parameters.carrier_frequency_hz)
+                effective_sample_rate = signal.sample_rate / samples_per_symbol
+                analog = demodulate_ssb(symbol_samples, effective_sample_rate, parameters.carrier_frequency_hz)
             else:
                 analog = demodulate_am(symbol_samples)
             result = DemodulationResult(analog, np.asarray(analog > np.median(analog), dtype=np.uint8), modulation)

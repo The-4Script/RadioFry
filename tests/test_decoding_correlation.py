@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import re
 
 from radiofry.correlation.bitstream_correlation import correlate_bitstream
 from radiofry.decoding.demodulators.psk_demod import demodulate_psk
@@ -84,6 +85,9 @@ def test_dispatch_routes_ssb_and_reports_timing_search() -> None:
     assert dispatched.result is not None
     assert dispatched.result.modulation == "AM-SSB"
     assert "coarse timing search" in dispatched.message
+    offset = int(re.search(r"offset (\d+)", dispatched.message).group(1))
+    expected_audio = audio[offset::8][:dispatched.result.symbols.size]
+    assert np.corrcoef(dispatched.result.symbols[10:], expected_audio[10:])[0, 1] > 0.99
 
 
 def test_dispatch_keeps_dsb_and_ssb_demodulators_distinct(monkeypatch: pytest.MonkeyPatch) -> None:
