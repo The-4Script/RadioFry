@@ -1,6 +1,17 @@
 import streamlit as st
 
+from gui.theme import apply_radiofry_theme, render_section_explainer
+
+apply_radiofry_theme()
+
 st.header("Bitstream Correlation")
+render_section_explainer(
+    "Stage 7: look for the signal’s hidden timing rhythm",
+    "A digital transmission often has repeating markers, like a clock or a start-of-message pattern. Correlation helps find those repeating structures and estimate where a frame or header might begin.",
+    "This stage looks for periodicity and known sync patterns. It is a clue-finding step, not proof of a network protocol. It helps explain how the data is framed and where the meaningful information likely starts.",
+    "When it finds a pattern, the app highlights likely header and payload regions to support downstream interpretation and reporting.",
+)
+
 report = st.session_state.get("report")
 correlation = report.get("stages", {}).get("bitstream_analysis", {}).get("correlation") if report else None
 if correlation:

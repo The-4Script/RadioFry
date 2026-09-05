@@ -17,8 +17,9 @@ pytest
 ```
 
 Optional ML, GUI, and FEC dependencies can be installed with `.[ml,gui,fec]`.
-RML2016.10a is already supported at `data/RML2016.10a_dict.pkl`. RML2018.01A
-is also supported directly in its original HDF5 form; place the extracted file
+RML2016.10a is supported at `data/RML2016.10a_dict.pkl` when supplied locally.
+Training datasets are not included in this release. RML2018.01A is also
+supported directly in its original HDF5 form; place the extracted file
 at `data/2018.01/GOLD_XYZ_OSC.0001_1024.hdf5` (or pass another `.h5` path to `--data`). Do not
 convert it to pickle: the trainer uses bounded stratified reads so a 2-million
 example archive does not need to be loaded entirely into RAM.
@@ -92,7 +93,7 @@ GNU Radio path and future GNU Radio digital/channel blocks.
 
 ## Free-tier hosting
 
-The current Streamlit GUI is deployable on [Streamlit Community Cloud](https://streamlit.io/cloud), which provides a free CPU tier for public GitHub repositories. Connect the repository, select `gui/app.py` as the main file, and set the Python version to 3.11 or newer. The tracked inference artifacts in `models_saved/` are sufficient for the hosted demo; do not upload the 640 MB RML training dataset.
+The current Streamlit GUI is deployable on [Streamlit Community Cloud](https://streamlit.io/cloud), which provides a free CPU tier for public GitHub repositories. Connect the repository, select `gui/app.py` as the main file, and set the Python version to 3.11 or newer. The inference artifacts in `models_saved/` are sufficient for the hosted demo; training datasets are intentionally excluded from the release.
 
 Hugging Face Spaces free dynamic hosting is not used for this MVP because free compute is intended for Gradio ZeroGPU, while this application is Streamlit. Migrating to Gradio would be a separate deployment project and would add risk without improving the current demo.
 

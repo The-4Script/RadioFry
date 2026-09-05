@@ -4,12 +4,31 @@ import numpy as np
 import plotly.graph_objects as go
 from scipy.signal import stft
 
+from gui.theme import apply_radiofry_theme, render_section_explainer
+
+apply_radiofry_theme()
+
 st.header("Upload and Preview")
+render_section_explainer(
+    "Stage 1: upload and inspect the signal",
+    "This stage is the first look at the raw signal. It lets a judge or user see whether the capture is clean, noisy, or obviously structured before deeper analysis begins.",
+    "The upload layer normalizes file format differences and exposes the raw I/Q samples. The preview shows the time-domain waveform and the time-frequency energy profile used for rough channel and occupancy assessment.",
+    "First, upload a signal. Then inspect the waveform and spectrogram. If these look valid, proceed to the parameter-estimation stage to understand what the signal is doing.",
+)
+
 signal = st.session_state.get("signal")
 if signal is None:
     st.info("Upload a WAV or IQ capture on the home page.")
 else:
-    st.write({"format": signal.source_format, "samples": signal.iq.size, "duration_sec": signal.duration_sec})
+    duration = f"{signal.duration_sec:.2f}s" if signal.duration_sec is not None else "unknown"
+    st.markdown(
+        "<div class='glass-card'><h4>Capture summary</h4><p>Format: {format} • Samples: {samples:,} • Duration: {duration}</p></div>".format(
+            format=signal.source_format,
+            samples=signal.iq.size,
+            duration=duration,
+        ),
+        unsafe_allow_html=True,
+    )
     preview = signal.iq[: min(signal.iq.size, 5000)]
     left, right = st.columns(2)
     with left:
@@ -43,4 +62,4 @@ else:
     time_step = max(1, power_db.shape[1] // 100)
     figure = go.Figure(go.Surface(x=times[::time_step], y=frequencies[::frequency_step], z=power_db[::frequency_step, ::time_step], colorscale="Viridis"))
     figure.update_layout(height=520, margin={"l": 0, "r": 0, "t": 30, "b": 0}, scene={"xaxis_title": "Time", "yaxis_title": "Frequency", "zaxis_title": "Power (dB)"})
-    st.plotly_chart(figure, use_container_width=True)
+    st.plotly_chart(figure, width="stretch")

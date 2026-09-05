@@ -1,6 +1,17 @@
 import streamlit as st
 
+from gui.theme import apply_radiofry_theme, render_section_explainer
+
+apply_radiofry_theme()
+
 st.header("De-interleaving")
+render_section_explainer(
+    "Stage 5: untangle the bit stream",
+    "Some transmissions deliberately rearrange their bits before sending them. This can make the message harder to read without the right de-interleaving method.",
+    "The classifier estimates whether the data was scrambled using a block, convolutional, diagonal, or pseudo-random pattern. Once selected, it attempts to reverse that rearrangement so the payload can be inspected more meaningfully.",
+    "If the arrangement is too irregular or intentionally random, the system records that limitation and avoids pretending it solved something it did not.",
+)
+
 report = st.session_state.get("report")
 analysis = report.get("stages", {}).get("bitstream_analysis", {}) if report else {}
 prediction = analysis.get("interleaver")
