@@ -81,6 +81,8 @@ def apply_radiofry_theme() -> None:
         [data-testid="stSidebar"] { background: #0d171c; border-right: 1px solid var(--line); }
         [data-testid="stSidebar"] * { color: #eaf3f0; }
         [data-testid="stSidebar"] hr { border-color: var(--line); }
+        [data-testid="stSidebarNav"] { display: none; }
+        .stDeployButton, [data-testid="stAppDeployButton"] { display: none !important; }
         .block-container { max-width: 1320px; padding-top: 2.5rem; padding-bottom: 4rem; }
         h1, h2, h3, h4 { color: var(--ink); letter-spacing: 0; }
         p, li, label { color: var(--ink); }
@@ -164,6 +166,18 @@ def render_sidebar(active_stage: int, has_analysis: bool) -> None:
         st.markdown("### Analysis bench")
         st.caption("Evidence first. Confidence visible. Review encouraged.")
         st.divider()
+        st.markdown("<div class='evidence-label'>Navigate</div>", unsafe_allow_html=True)
+        st.page_link("app.py", label="Overview", icon=":material/home:")
+        st.page_link("pages/1_upload_preview.py", label="Upload & preview", icon=":material/waves:")
+        st.page_link("pages/2_parameters.py", label="Parameters", icon=":material/tune:")
+        st.page_link("pages/3_modulation.py", label="Modulation", icon=":material/hub:")
+        st.page_link("pages/4_demodulation.py", label="Demodulation", icon=":material/transform:")
+        st.page_link("pages/5_deinterleaving.py", label="Deinterleaving", icon=":material/reorder:")
+        st.page_link("pages/6_fec_decoding.py", label="FEC decoding", icon=":material/shield:")
+        st.page_link("pages/7_correlation.py", label="Correlation", icon=":material/track_changes:")
+        st.page_link("pages/8_report.py", label="Report", icon=":material/description:")
+        st.divider()
+        st.markdown("<div class='evidence-label'>Progress</div>", unsafe_allow_html=True)
         for index, (number, name) in enumerate(STAGES, start=1):
             active_class = " active" if index == active_stage else ""
             marker = "●" if has_analysis and index <= active_stage else "○"

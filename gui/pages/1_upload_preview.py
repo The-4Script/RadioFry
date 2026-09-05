@@ -7,9 +7,15 @@ from scipy.signal import stft
 from gui.theme import apply_radiofry_theme, render_empty_state, render_method_note, render_stage_header
 
 apply_radiofry_theme()
-render_stage_header("01", "Upload & preview", "Confirm that the capture is present, interpretable, and worth taking into the deeper analysis stages.")
-
 signal = st.session_state.get("signal")
+render_stage_header(
+    "01",
+    "Upload & preview",
+    "Confirm that the capture is present, interpretable, and worth taking into the deeper analysis stages.",
+    "Ready" if signal is not None else "Waiting",
+    "ready" if signal is not None else "muted",
+)
+
 if signal is None:
     render_empty_state("Analyze a WAV or IQ capture on the home page first.", "This page becomes the visual sanity check before parameter estimation.")
 else:
