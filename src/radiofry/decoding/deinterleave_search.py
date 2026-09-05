@@ -1,10 +1,11 @@
-"""Bounded candidate search for block and diagonal interleavers."""
+"""Bounded candidate search for supported deterministic interleavers."""
 
 from dataclasses import dataclass
 
 import numpy as np
 
 from .deinterleavers.block import block_deinterleave
+from .deinterleavers.convolutional import convolutional_deinterleave
 from .deinterleavers.diagonal import diagonal_deinterleave
 
 
@@ -31,9 +32,19 @@ def search_deinterleave(bits: np.ndarray, interleaver_type: str, candidates: tup
     best = (values, {}, -_entropy(values))
     for first in candidates:
         try:
-            candidate = block_deinterleave(values, first, values.size // first) if interleaver_type == "block" and values.size % first == 0 else diagonal_deinterleave(values, first) if interleaver_type == "diagonal" and values.size % first == 0 else None
+            candidate = None
+            parameters = {}
+            if interleaver_type == "block" and values.size % first == 0:
+                candidate = block_deinterleave(values, first, values.size // first)
+                parameters = {"rows": first, "columns": values.size // first}
+            elif interleaver_type == "diagonal" and values.size % first == 0:
+                candidate = diagonal_deinterleave(values, first)
+                parameters = {"width": first}
+            elif interleaver_type == "convolutional":
+                candidate = convolutional_deinterleave(values, first, 1)
+                parameters = {"branches": first, "increment": 1}
         except ValueError:
             candidate = None
         if candidate is not None and -_entropy(candidate) > best[2]:
-            best = (candidate, {"rows": first, "columns": values.size // first} if interleaver_type == "block" else {"width": first}, -_entropy(candidate))
+            best = (candidate, parameters, -_entropy(candidate))
     return DeinterleaveResult(best[0], interleaver_type, best[1], best[2])

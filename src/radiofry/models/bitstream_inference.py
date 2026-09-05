@@ -30,6 +30,14 @@ def predict_bitstream(bits: np.ndarray, model_path: str | Path) -> BitstreamPred
         with path.open("rb") as handle:
             model = pickle.load(handle)
         features = bit_features(values).reshape(1, -1)
+        expected_features = getattr(model, "n_features_in_", features.shape[1])
+        if int(expected_features) != features.shape[1]:
+            return BitstreamPrediction(
+                "unknown",
+                0.0,
+                False,
+                f"Classifier feature mismatch: expected {expected_features}, got {features.shape[1]}",
+            )
         label = str(model.predict(features)[0])
         probabilities = model.predict_proba(features)[0] if hasattr(model, "predict_proba") else np.array([1.0])
         return BitstreamPrediction(label, float(np.max(probabilities)))

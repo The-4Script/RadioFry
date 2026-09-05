@@ -25,7 +25,22 @@ def reed_solomon_encode(bits: np.ndarray, nsym: int = 32) -> np.ndarray:
         encoded = RSCodec(nsym).encode(payload)
         return np.unpackbits(np.frombuffer(encoded, dtype=np.uint8))
     except ImportError:
-        return np.repeat(values, 2)
+        raise RuntimeError("reedsolo is required to generate Reed-Solomon training data")
+
+
+def ldpc_encode(bits: np.ndarray) -> np.ndarray:
+    """Encode LDPC data only when a real encoder is available."""
+
+    try:
+        from pyldpc import make_ldpc, encode
+    except ImportError as error:
+        raise RuntimeError("pyldpc is required to generate LDPC training data") from error
+    values = np.asarray(bits, dtype=np.uint8).ravel() & 1
+    block_length = max(8, values.size)
+    parity_check, generator = make_ldpc(block_length, d_v=2, d_c=4, systematic=True, sparse=True)
+    padded = np.pad(values, (0, (-values.size) % generator.shape[1]))
+    codewords = [encode(generator, padded[index:index + generator.shape[1]], snr=100) for index in range(0, padded.size, generator.shape[1])]
+    return (np.concatenate(codewords) > 0).astype(np.uint8)
 
 
 def generate_fec_dataset(output_dir: str | Path, *, examples_per_class: int = 100, length: int = 256, seed: int = 7) -> Path:
@@ -48,7 +63,11 @@ def generate_fec_dataset(output_dir: str | Path, *, examples_per_class: int = 10
                 elif label == "concatenated":
                     bits = convolutional_encode(reed_solomon_encode(bits))
                 elif label == "ldpc":
-                    bits = np.repeat(bits, 2)
+                    try:
+                        bits = ldpc_encode(bits)
+                    except RuntimeError:
+                        writer.writerow({"filename": "", "fec_type": label, "fec_params": "unavailable"})
+                        continue
                 filename = f"fec_{index:05d}.npy"
                 np.save(output / filename, bits)
                 writer.writerow({"filename": filename, "fec_type": label, "fec_params": "default"})

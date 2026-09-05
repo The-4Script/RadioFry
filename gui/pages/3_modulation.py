@@ -1,5 +1,8 @@
 import streamlit as st
 from pathlib import Path
+import matplotlib.pyplot as plt
+import numpy as np
+import plotly.graph_objects as go
 
 st.header("Modulation")
 report = st.session_state.get("report")
@@ -22,10 +25,26 @@ else:
         st.subheader("CNN top predictions")
         top_k = prediction.get("top_k", [])
         st.bar_chart({label: probability for label, probability in top_k})
+        st.table([{"modulation": label, "confidence": f"{probability:.1%}"} for label, probability in top_k])
     else:
         st.warning(prediction.get("message", "CNN inference is unavailable."))
     if fusion.get("review_recommended"):
         st.warning("Review recommended: the independent estimates are low-confidence or disagree.")
+    st.caption(f"Classical family: {fusion.get('classical_family', 'unknown')} | alternatives: {', '.join(fusion.get('alternatives', [])) or 'none'}")
+    demodulation = report["stages"].get("demodulation", {})
+    symbols = demodulation.get("result", {}).get("symbols", []) if demodulation.get("available") else []
+    if symbols:
+        points = np.asarray(symbols)
+        figure, axis = plt.subplots(figsize=(5, 4))
+        axis.scatter(points.real, points.imag, s=8, alpha=0.6)
+        axis.set_xlabel("In-phase")
+        axis.set_ylabel("Quadrature")
+        axis.set_title("Recovered constellation")
+        axis.grid(alpha=0.25)
+        st.pyplot(figure, clear_figure=True)
+        trajectory = go.Figure(go.Scatter3d(x=points.real, y=points.imag, z=np.arange(points.size), mode="markers", marker={"size": 3, "color": np.arange(points.size), "colorscale": "Turbo", "opacity": 0.75}))
+        trajectory.update_layout(height=500, margin={"l": 0, "r": 0, "t": 30, "b": 0}, scene={"xaxis_title": "In-phase", "yaxis_title": "Quadrature", "zaxis_title": "Symbol index"})
+        st.plotly_chart(trajectory, use_container_width=True)
     for bucket in ("low", "mid", "high"):
         plot_path = Path(f"reports/confusion_{bucket}.png")
         if plot_path.exists():

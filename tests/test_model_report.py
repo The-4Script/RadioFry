@@ -5,6 +5,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+import radiofry.pipeline as pipeline
 from radiofry.models.modulation_cnn import ModulationCNN
 from radiofry.reporting.report_builder import build_report, report_json
 
@@ -22,3 +23,43 @@ def test_report_serializes_dataclasses_and_numpy_values() -> None:
     loaded = json.loads(report_json(report))
     assert loaded["source"]["samples"] == 8
     assert loaded["stages"]["scores"] == [0.2, 0.8]
+
+
+def test_pipeline_classifies_fec_after_deinterleaving(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyPrediction:
+        available = True
+        label = "none"
+        confidence = 1.0
+        top_k = (("BPSK", 1.0),)
+        message = ""
+
+    class DummyDeinterleaving:
+        bits = np.array([1, 0, 1, 0], dtype=np.uint8)
+
+    class DummyDecoded:
+        bits = np.array([1, 0], dtype=np.uint8)
+
+    signal = pipeline.UnifiedSignalContainer(
+        iq=np.ones(16, dtype=np.complex64),
+        sample_rate=8.0,
+        source_format="test",
+        metadata={},
+    )
+    classified_inputs: list[np.ndarray] = []
+
+    monkeypatch.setattr(pipeline, "preprocess", lambda signal, target_sample_rate=None: signal)
+    monkeypatch.setattr(pipeline, "estimate_parameters", lambda signal: {})
+    monkeypatch.setattr(pipeline, "estimate_modulation_family", lambda iq: type("Classical", (), {"family": "PSK-like"})())
+    monkeypatch.setattr(pipeline, "predict_modulation", lambda signal, model_path: DummyPrediction())
+    monkeypatch.setattr(pipeline, "predict_bitstream", lambda bits, model_path: classified_inputs.append(np.array(bits)) or DummyPrediction())
+    monkeypatch.setattr(pipeline, "search_deinterleave", lambda bits, interleaver_type: DummyDeinterleaving())
+    monkeypatch.setattr(pipeline, "decode_fec", lambda bits, scheme: DummyDecoded())
+    monkeypatch.setattr(pipeline, "correlate_bitstream", lambda bits: {})
+    monkeypatch.setattr(pipeline, "build_report", lambda source, stages: stages)
+    monkeypatch.setattr(pipeline, "demodulate_capture", lambda signal, label, parameters: type("Dispatch", (), {"available": False, "result": None})())
+
+    pipeline.analyze_capture(signal, bits=np.array([0, 1, 0, 1], dtype=np.uint8))
+
+    assert len(classified_inputs) == 2
+    np.testing.assert_array_equal(classified_inputs[0], [0, 1, 0, 1])
+    np.testing.assert_array_equal(classified_inputs[1], [1, 0, 1, 0])

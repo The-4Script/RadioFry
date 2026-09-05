@@ -67,13 +67,18 @@ def train_modulation(
     if selected_device.type == "cuda":
         torch.cuda.manual_seed_all(seed)
     frames, targets, snrs, labels = load_rml_dataset(data_path)
+    stratify_key = np.array([f"{target}:{snr}" for target, snr in zip(targets, snrs)])
     if max_samples is not None:
         if max_samples < len(labels) * 3:
             raise ValueError("max_samples is too small to represent every class")
-        generator = np.random.default_rng(seed)
-        selected = generator.choice(len(targets), size=min(max_samples, len(targets)), replace=False)
+        selected, _ = train_test_split(
+            np.arange(len(targets)),
+            train_size=min(max_samples, len(targets)),
+            random_state=seed,
+            stratify=stratify_key,
+        )
         frames, targets, snrs = frames[selected], targets[selected], snrs[selected]
-    stratify_key = np.array([f"{target}:{snr}" for target, snr in zip(targets, snrs)])
+        stratify_key = stratify_key[selected]
     train_idx, remainder_idx = train_test_split(np.arange(len(targets)), test_size=0.30, random_state=seed, stratify=stratify_key)
     remainder_key = stratify_key[remainder_idx]
     val_idx, test_idx = train_test_split(remainder_idx, test_size=0.50, random_state=seed, stratify=remainder_key)

@@ -6,6 +6,7 @@ from scipy.io import wavfile
 from radiofry.dsp.preprocessing import preprocess
 from radiofry.ingestion.iq_parser import IQFormat, read_iq
 from radiofry.ingestion.wav_parser import read_wav
+from radiofry.pipeline import load_capture
 
 
 def test_read_interleaved_int16_iq(tmp_path: Path) -> None:
@@ -29,6 +30,16 @@ def test_read_stereo_wav_as_iq(tmp_path: Path) -> None:
     assert signal.metadata["channel_mode"] == "stereo_iq"
     assert signal.iq.dtype == np.complex64
     np.testing.assert_allclose(signal.iq.real, [100 / 32768, 200 / 32768])
+
+
+def test_load_capture_dispatches_by_capture_extension(tmp_path: Path) -> None:
+    wav_path = tmp_path / "uploaded.wav"
+    wavfile.write(wav_path, 8_000, np.array([[100, -50], [200, -100]], dtype=np.int16))
+    iq_path = tmp_path / "uploaded.iq"
+    np.array([1, -2, 3, -4], dtype="<i2").tofile(iq_path)
+
+    assert load_capture(wav_path).source_format == "wav"
+    assert load_capture(iq_path, sample_rate=2_000, iq_format=IQFormat("int16", "little")).source_format == "iq"
 
 
 def test_preprocess_removes_dc_and_normalizes_power() -> None:

@@ -7,8 +7,13 @@ prediction = analysis.get("interleaver")
 if prediction:
 	st.metric("Predicted type", prediction.get("label", "unknown"))
 	st.metric("Confidence", f"{prediction.get('confidence', 0):.1%}")
+	st.caption(f"Selected type: {analysis.get('selected_interleaver', prediction.get('label', 'unknown'))}")
+	if not prediction.get("available", True):
+		st.warning(prediction.get("message", "Interleaver classifier unavailable."))
 	result = analysis.get("deinterleaving", {})
 	if result:
 		st.json({"parameters": result.get("parameters", {}), "score": result.get("score", 0), "limitation": result.get("limitation")})
+		st.caption("De-interleaved preview")
+		st.code("".join(str(int(bit)) for bit in result.get("bits", [])[:512]))
 else:
 	st.info(analysis.get("message", "Provide demodulated bits to run interleaver classification."))

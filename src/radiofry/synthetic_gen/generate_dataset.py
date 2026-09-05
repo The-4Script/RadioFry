@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .interleavers import block_interleave, diagonal_interleave, pseudo_random_interleave
+from .interleavers import block_interleave, convolutional_interleave, diagonal_interleave, pseudo_random_interleave
 
 
 def generate_interleaver_dataset(output_dir: str | Path, *, examples_per_class: int = 100, length: int = 128, seed: int = 7) -> Path:
@@ -13,20 +13,19 @@ def generate_interleaver_dataset(output_dir: str | Path, *, examples_per_class: 
     output.mkdir(parents=True, exist_ok=True)
     manifest = output / "manifest.csv"
     generator = np.random.default_rng(seed)
-    labels = ["none", "block", "diagonal", "pseudo_random"]
+    labels = ["none", "block", "convolutional", "diagonal", "pseudo_random"]
     with manifest.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=["filename", "interleaver_type", "parameter"])
         writer.writeheader()
         index = 0
         for label in labels:
             for _ in range(examples_per_class):
-                frame = np.array([int(bit) for bit in "01111110000110111011001011001001"], dtype=np.uint8)
-                bits = np.resize(frame, length).copy()
-                noise = generator.random(length) < 0.05
-                bits[noise] ^= 1
+                bits = generator.integers(0, 2, size=length, dtype=np.uint8)
                 parameter = ""
                 if label == "block":
                     bits = block_interleave(bits, 8, length // 8); parameter = "8"
+                elif label == "convolutional":
+                    bits = convolutional_interleave(bits, 4, 1); parameter = "4,1"
                 elif label == "diagonal":
                     bits = diagonal_interleave(bits, 8); parameter = "8"
                 elif label == "pseudo_random":

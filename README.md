@@ -32,6 +32,20 @@ $env:PYTHONPATH = "src"
 The trainer selects CUDA automatically when available and falls back to CPU;
 `--device cuda` makes a missing CUDA installation fail explicitly.
 
+The synthetic classical classifiers can be trained and evaluated directly from
+their manifests. Each command writes the pickle model and a companion JSON
+file containing held-out accuracy, five-fold cross-validation, confusion data,
+and feature importances:
+
+```bash
+PYTHONPATH=src python -m radiofry.training.train_interleaver
+PYTHONPATH=src python -m radiofry.training.train_fec
+```
+
+Regenerate the synthetic manifests before training if the checked-in corpus is
+missing an architecture class; the generator is the source of truth for the
+five interleaver labels and five FEC labels.
+
 ## WSL2 GNU Radio workflow
 
 The repository is available inside Ubuntu at `/mnt/c/RadioFry`. GNU Radio
@@ -52,6 +66,18 @@ PYTHONPATH=src streamlit run gui/app.py
 The GNU Radio adapter currently generates channel-impaired BPSK baseband
 samples. Use the NumPy generator for Windows-only execution; use WSL for the
 GNU Radio path and future GNU Radio digital/channel blocks.
+
+## Free-tier hosting
+
+The current Streamlit GUI is deployable on [Streamlit Community Cloud](https://streamlit.io/cloud), which provides a free CPU tier for public GitHub repositories. Connect the repository, select `gui/app.py` as the main file, and set the Python version to 3.11 or newer. The tracked inference artifacts in `models_saved/` are sufficient for the hosted demo; do not upload the 640 MB RML training dataset.
+
+Hugging Face Spaces free dynamic hosting is not used for this MVP because free compute is intended for Gradio ZeroGPU, while this application is Streamlit. Migrating to Gradio would be a separate deployment project and would add risk without improving the current demo.
+
+For a local deployment smoke test:
+
+```bash
+PYTHONPATH=src streamlit run gui/app.py --server.headless true
+```
 
 ## Current pipeline boundary
 
