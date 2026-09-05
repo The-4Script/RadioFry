@@ -1,29 +1,22 @@
 import streamlit as st
 
-from gui.theme import apply_radiofry_theme, render_section_explainer
+from gui.theme import apply_radiofry_theme, render_bit_preview, render_empty_state, render_method_note, render_stage_header
 
 apply_radiofry_theme()
-
-st.header("Demodulation")
-render_section_explainer(
-    "Stage 4: convert signal symbols into usable data",
-    "Once the system knows the likely modulation, it tries to turn the symbol cloud into actual bit data. This is the point where the raw signal becomes a sequence of ones and zeros that can be checked for structure.",
-    "The demodulation stage produces recovered symbol and bit data when the classification is strong enough. It is not an arbitrary guess; it is a structured attempt to recover the original digital message from the waveform.",
-    "If the signal is too noisy or out of distribution, the system will stop early and explain why instead of forcing a false result.",
-)
-
 report = st.session_state.get("report")
 demodulation = report.get("stages", {}).get("demodulation", {}) if report else {}
-if demodulation.get("available"):
-	result = demodulation.get("result", {})
-	st.metric("Modulation", result.get("modulation", "unknown"))
-	st.metric("Recovered bits", len(result.get("bits", [])))
-	st.caption(demodulation.get("message", ""))
-else:
-	st.info(demodulation.get("message", "Analyze a capture on the home page first."))
+status = "Available" if demodulation.get("available") else "Needs review"
+status_kind = "ready" if demodulation.get("available") else "review"
+render_stage_header("04", "Demodulation", "Translate the waveform into symbols and bits using the current modulation hypothesis.", status, status_kind)
 
-if demodulation.get("available"):
-	result = demodulation.get("result", {})
-	bits = result.get("bits", [])
-	st.subheader("Recovered bitstream")
-	st.code("".join(str(int(bit)) for bit in bits[:512]) or "No bits recovered")
+if report is None:
+    render_empty_state("Analyze a capture on the home page first.")
+elif not demodulation.get("available"):
+    render_empty_state(demodulation.get("message", "Demodulation was not available."), "The pipeline avoids forcing a bitstream when the modulation decision is not trustworthy enough.")
+else:
+    result = demodulation.get("result", {})
+    left, right = st.columns(2)
+    left.metric("Modulation used", result.get("modulation", "Unknown"))
+    right.metric("Recovered bits", f"{len(result.get('bits', [])):,}")
+    render_bit_preview(result.get("bits", []), "Recovered bitstream")
+    render_method_note("Method and limits", "Demodulation uses the selected modulation family and estimated signal parameters. Symbol timing, carrier recovery, and protocol-specific framing may still need expert calibration.")

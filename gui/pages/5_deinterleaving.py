@@ -1,30 +1,31 @@
 import streamlit as st
 
-from gui.theme import apply_radiofry_theme, render_section_explainer
+from gui.theme import apply_radiofry_theme, render_bit_preview, render_empty_state, render_method_note, render_stage_header
 
 apply_radiofry_theme()
-
-st.header("De-interleaving")
-render_section_explainer(
-    "Stage 5: untangle the bit stream",
-    "Some transmissions deliberately rearrange their bits before sending them. This can make the message harder to read without the right de-interleaving method.",
-    "The classifier estimates whether the data was scrambled using a block, convolutional, diagonal, or pseudo-random pattern. Once selected, it attempts to reverse that rearrangement so the payload can be inspected more meaningfully.",
-    "If the arrangement is too irregular or intentionally random, the system records that limitation and avoids pretending it solved something it did not.",
-)
-
 report = st.session_state.get("report")
 analysis = report.get("stages", {}).get("bitstream_analysis", {}) if report else {}
-prediction = analysis.get("interleaver")
-if prediction:
-	st.metric("Predicted type", prediction.get("label", "unknown"))
-	st.metric("Confidence", f"{prediction.get('confidence', 0):.1%}")
-	st.caption(f"Selected type: {analysis.get('selected_interleaver', prediction.get('label', 'unknown'))}")
-	if not prediction.get("available", True):
-		st.warning(prediction.get("message", "Interleaver classifier unavailable."))
-	result = analysis.get("deinterleaving", {})
-	if result:
-		st.json({"parameters": result.get("parameters", {}), "score": result.get("score", 0), "limitation": result.get("limitation")})
-		st.caption("De-interleaved preview")
-		st.code("".join(str(int(bit)) for bit in result.get("bits", [])[:512]))
+prediction = analysis.get("interleaver") or {}
+ready = bool(prediction)
+render_stage_header("05", "Deinterleaving", "Test whether recovered bits were rearranged before transmission and attempt to restore their order.", "Available" if ready else "Waiting", "ready" if ready else "muted")
+
+if report is None:
+    render_empty_state("Analyze a capture on the home page first.")
+elif not ready:
+    render_empty_state(analysis.get("message", "Provide demodulated bits to run interleaver classification."))
 else:
-	st.info(analysis.get("message", "Provide demodulated bits to run interleaver classification."))
+    result = analysis.get("deinterleaving", {})
+    left, right = st.columns(2)
+    left.metric("Predicted type", prediction.get("label", "Unknown"))
+    right.metric("Confidence", f"{prediction.get('confidence', 0):.1%}")
+    st.caption(f"Selected method: {analysis.get('selected_interleaver', 'unknown')}")
+    if not prediction.get("available", True):
+        st.warning(prediction.get("message", "Interleaver classifier unavailable."))
+    if result:
+        columns = st.columns(2)
+        columns[0].metric("Search score", f"{result.get('score', 0):.3f}")
+        columns[1].metric("Parameters", str(result.get("parameters", {})) or "None")
+        render_bit_preview(result.get("bits", []), "Deinterleaved preview")
+        if result.get("limitation"):
+            st.info(result["limitation"])
+    render_method_note("Method and limits", "Block, convolutional, and diagonal searches are deterministic transforms. Pseudo-random deinterleaving requires a seed; a classifier label alone does not prove the original ordering.")

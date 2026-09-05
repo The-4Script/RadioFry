@@ -10,156 +10,87 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import streamlit as st
 
-from gui.theme import apply_radiofry_theme, render_section_explainer
+from gui.theme import apply_radiofry_theme, render_method_note, render_sidebar, render_tutorial
 from radiofry.ingestion.iq_parser import IQFormat
 from radiofry.pipeline import DEFAULT_MAX_CAPTURE_BYTES, analyze_capture, load_capture
 from radiofry.reporting.report_builder import build_pdf_report, report_json
 
 
 st.set_page_config(page_title="RadioFry", page_icon="RF", layout="wide")
+st.session_state.setdefault("show_tutorial", True)
 apply_radiofry_theme()
-
-st.sidebar.markdown(
-    """
-    <div class='hero-panel'>
-        <div class='highlight'>RF Intelligence Demo</div>
-        <h3 style='margin-top: 0.9rem;'>RadioFry</h3>
-        <p style='color: #dfeeff; margin-bottom: 0.3rem;'>Signal understanding for non-experts and experts alike.</p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.sidebar.caption("Demo walkthrough")
-for index, item in enumerate([
-    "Upload a waveform or IQ capture",
-    "Estimate signal parameters",
-    "Classify modulation and confidence",
-    "Inspect interleaver and FEC structure",
-    "Generate a report for review",
-], start=1):
-    st.sidebar.markdown(f"<div class='info-pill'><b>{index}.</b> {item}</div>", unsafe_allow_html=True)
+render_sidebar(active_stage=0, has_analysis="report" in st.session_state)
 
 st.markdown(
     """
-    <div class='hero-panel'>
-        <div class='highlight'>Public demo • expert review ready</div>
-        <h1 style='margin: 0.7rem 0 0.4rem; font-size: 3rem;'>RadioFry</h1>
-        <p style='font-size: 1.15rem; line-height: 1.6; color: #eaf2ff; margin-bottom: 0.75rem;'>
-            RadioFry turns raw radio signals into understandable insights. It reads a capture, estimates how the signal is behaving,
-            identifies the likely modulation, and checks whether the data has been scrambled or protected by error-correction.
+    <div class="hero-panel">
+        <div class="brand-mark">SIH26147 / Signal analysis workbench</div>
+        <h1 style="margin: 0.7rem 0 0.45rem;">RadioFry</h1>
+        <p style="font-size: 1.08rem; line-height: 1.55; margin-bottom: 0.35rem;">
+            A transparent workflow for turning WAV and raw IQ captures into measurable signal evidence.
         </p>
-        <p style='margin-bottom: 0.2rem; color: #bdd7fb;'>
-            In plain English: if a signal is noisy, distorted, or hidden inside a transmission format, RadioFry helps explain what it may be.
-        </p>
+        <p style="color: #c9d8d2; margin: 0;">Upload a capture, inspect the evidence, and decide where expert review is still needed.</p>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-st.subheader("What this system does")
-left, center, right = st.columns(3)
-with left:
-    st.markdown("<div class='glass-card'><h4>For the public</h4><p>It helps us understand what a radio transmission might be saying, even when the raw data looks like noise.</p></div>", unsafe_allow_html=True)
-with center:
-    st.markdown("<div class='glass-card'><h4>For engineers</h4><p>It estimates bandwidth, symbol rate, modulation family, and bitstream structure using a multi-stage signal analysis pipeline.</p></div>", unsafe_allow_html=True)
-with right:
-    st.markdown("<div class='glass-card'><h4>For decision makers</h4><p>It turns technical evidence into a structured report so the signal can be reviewed, explained, and acted on.</p></div>", unsafe_allow_html=True)
+render_tutorial()
 
-render_section_explainer(
-    "Judge walkthrough: how to explore this site",
-    "This demo is designed like a guided story. You start by uploading a signal, then the app explains what it sees, what it thinks the signal is, and how confident it is. The goal is to make a complex radio-analysis pipeline understandable without losing technical depth.",
-    "The pipeline performs four stages: ingest → parameter estimation → modulation classification/fusion → bitstream analysis (interleaver/FEC/correlation). Each stage produces evidence that supports or challenges the final interpretation and is captured in a JSON/PDF report.",
-    "Start on the home page, upload a file, then follow the pages in order: Upload & Preview → Parameters → Modulation → Demodulation → Deinterleaving → FEC → Correlation → Report. Each page explains the current step and what should happen next.",
-)
+st.subheader("Start an analysis")
+st.caption("Use a short baseband recording from an SDR or a documented synthetic capture. Music and sonified audio are useful only for testing the visual layer.")
 
-st.subheader("Demo flow")
-step1, step2, step3, step4, step5 = st.columns(5)
-for column, content in zip(
-    [step1, step2, step3, step4, step5],
-    [
-        ("1", "Upload", "Choose a WAV or IQ capture and inspect the raw waveform."),
-        ("2", "Measure", "Estimate SNR, bandwidth, and signal timing."),
-        ("3", "Classify", "Use classical signal checks and a CNN to infer modulation."),
-        ("4", "Decode", "Check the bitstream for interleaving and forward-error correction."),
-        ("5", "Report", "Review a structured evidence package with expert summary."),
-    ],
-):
-    with column:
-        st.markdown(
-            f"<div class='glass-card'><div class='step-badge'>{content[0]}</div><h4>{content[1]}</h4><p>{content[2]}</p></div>",
-            unsafe_allow_html=True,
-        )
-
-st.subheader("How to use this demo")
-use_columns = st.columns(2)
-with use_columns[0]:
-    st.markdown(
-        """
-        <div class='glass-card'>
-            <h4>Layman explanation</h4>
-            <p>Think of this as a digital detective for radio signals. It reads the raw data, looks for patterns, and tries to explain what kind of transmission it might be and whether the information was protected or scrambled.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-with use_columns[1]:
-    st.markdown(
-        """
-        <div class='glass-card'>
-            <h4>Expert explanation</h4>
-            <p>The app performs format-independent signal analysis from IQ samples, estimates key modulation and channel parameters, and combines independent evidence to produce a structured confidence-aware interpretation.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-st.info("For meaningful RF identification, use baseband I/Q from a documented SDR or a synthetic RF capture. Music and sonified space audio can test visualization, but cannot validate modulation, FEC, or interleaver claims.")
-
-st.subheader("Upload and analyze")
-uploaded = st.file_uploader("Upload a WAV or raw IQ capture", type=["wav", "iq"])
+uploaded = st.file_uploader("Choose a WAV or raw IQ capture", type=["wav", "iq"], label_visibility="visible")
 if uploaded is not None:
     if uploaded.size > DEFAULT_MAX_CAPTURE_BYTES:
         st.error(f"Capture exceeds the {DEFAULT_MAX_CAPTURE_BYTES // (1024 * 1024)} MB upload limit.")
         st.stop()
 
     upload_key = (uploaded.name, uploaded.size)
-    previous_key = st.session_state.get("upload_key")
-    if previous_key != upload_key:
+    if st.session_state.get("upload_key") != upload_key:
         previous_path = Path(st.session_state.get("upload_path", ""))
         if previous_path.is_file():
             previous_path.unlink(missing_ok=True)
         st.session_state.pop("report", None)
         st.session_state.pop("signal", None)
-        st.session_state.pop("upload_analysis_key", None)
         st.session_state["upload_key"] = upload_key
 
     temporary_path = Path(st.session_state.get("upload_path", ""))
-    if not temporary_path.exists() or st.session_state.get("upload_name") != uploaded.name:
+    if not temporary_path.is_file() or st.session_state.get("upload_name") != uploaded.name:
         suffix = Path(uploaded.name).suffix.lower()
-        temporary_file = tempfile.NamedTemporaryFile(prefix="radiofry-", suffix=suffix, delete=False)
-        temporary_path = Path(temporary_file.name)
-        temporary_file.close()
+        with tempfile.NamedTemporaryFile(prefix="radiofry-", suffix=suffix, delete=False) as temporary_file:
+            temporary_path = Path(temporary_file.name)
         temporary_path.write_bytes(uploaded.getvalue())
         st.session_state["upload_path"] = str(temporary_path)
         st.session_state["upload_name"] = uploaded.name
-    with st.expander("Expert analysis controls", expanded=True):
-        symbol_rate_input = st.number_input("Symbol rate override (Hz, optional)", min_value=0.0, value=0.0)
-        interleaver_choice = st.selectbox("Interleaver handling", ["Auto", "None", "Block", "Convolutional", "Diagonal", "Pseudo-random"])
-        fec_choice = st.selectbox("FEC handling", ["Auto", "None", "Convolutional", "Reed-Solomon", "Concatenated", "LDPC"])
+
+    with st.expander("Analysis assumptions", expanded=True):
+        control_left, control_right = st.columns(2)
+        with control_left:
+            symbol_rate_input = st.number_input("Symbol rate override (Hz)", min_value=0.0, value=0.0, help="Leave at zero to use the estimator.")
+            interleaver_choice = st.selectbox("Interleaver", ["Auto", "None", "Block", "Convolutional", "Diagonal", "Pseudo-random"])
+        with control_right:
+            fec_choice = st.selectbox("FEC", ["Auto", "None", "Convolutional", "Reed-Solomon", "Concatenated", "LDPC"])
+            st.caption("Overrides are useful when sensor metadata or protocol documentation is available.")
+
     interleaver_override = interleaver_choice.lower().replace("-", "_") if interleaver_choice != "Auto" else None
     fec_override = fec_choice.lower().replace("-", "_") if fec_choice != "Auto" else None
 
     if uploaded.name.lower().endswith(".wav"):
         sample_rate = None
         iq_format = None
-        analyze = st.button("Analyze capture", type="primary")
+        analyze = st.button("Analyze capture", type="primary", use_container_width=True)
     else:
         with st.form("iq_options"):
-            sample_rate = st.number_input("IQ sample rate (Hz, optional)", min_value=0.0, value=0.0)
-            dtype = st.selectbox("IQ dtype", ["int16", "float32"])
-            byte_order = st.selectbox("IQ byte order", ["little", "big"])
-            analyze = st.form_submit_button("Analyze capture", type="primary")
+            st.markdown("**Raw IQ interpretation**")
+            iq_left, iq_right = st.columns(2)
+            with iq_left:
+                sample_rate = st.number_input("Sample rate (Hz)", min_value=0.0, value=0.0)
+                dtype = st.selectbox("Value type", ["int16", "float32"])
+            with iq_right:
+                byte_order = st.selectbox("Byte order", ["little", "big"])
+                st.caption("Raw IQ files have no header, so these values must come from the sensor or recording notes.")
+            analyze = st.form_submit_button("Analyze capture", type="primary", use_container_width=True)
         iq_format = IQFormat(dtype, byte_order)
 
     if analyze:
@@ -174,26 +105,29 @@ if uploaded is not None:
             st.session_state["report"] = report
             st.session_state["signal"] = signal
             st.session_state["upload_analysis_key"] = uploaded.name
+            st.rerun()
         except (OSError, ValueError, RuntimeError, ImportError) as error:
             st.error(str(error))
 
     signal = st.session_state.get("signal")
     report = st.session_state.get("report")
     if signal is not None and report is not None:
-        columns = st.columns(2)
-        columns[0].metric("Samples", f"{signal.iq.size:,}")
-        columns[1].metric("Sample rate", signal.sample_rate or "Unknown")
-        st.download_button("Download JSON report", report_json(report), "radiofry-report.json", "application/json")
-        pdf_path = Path(tempfile.gettempdir()) / "radiofry-report.pdf"
-        build_pdf_report(report, str(pdf_path), signal)
-        st.download_button("Download formal PDF report", pdf_path.read_bytes(), "radiofry-report.pdf", "application/pdf")
-        st.success("Analysis ready. Continue through the pages to review the evidence step by step.")
+        st.success("Analysis complete. Use the stages in the sidebar to inspect the evidence.")
+        summary_left, summary_mid, summary_right = st.columns(3)
+        summary_left.metric("Samples", f"{signal.iq.size:,}")
+        summary_mid.metric("Sample rate", signal.sample_rate or "Unknown")
+        summary_right.metric("Source", signal.source_format.upper())
+        download_left, download_right = st.columns(2)
+        with download_left:
+            st.download_button("Download JSON", report_json(report), "radiofry-report.json", "application/json", use_container_width=True)
+        with download_right:
+            pdf_path = Path(tempfile.gettempdir()) / "radiofry-report.pdf"
+            build_pdf_report(report, str(pdf_path), signal)
+            st.download_button("Download PDF", pdf_path.read_bytes(), "radiofry-report.pdf", "application/pdf", use_container_width=True)
 else:
-    st.markdown(
-        """
-        <div class='glass-card'>
-            <p>Upload a file to unlock the full demo. Once a signal is loaded, the system will walk through signal understanding, interpretation, and reporting.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown("<div class='evidence-panel'><div class='evidence-label'>No capture selected</div><p>Choose a file above to unlock the evidence stages.</p></div>", unsafe_allow_html=True)
+
+render_method_note(
+    "What RadioFry can and cannot claim",
+    "RadioFry estimates signal parameters, compares modulation evidence, and attempts bitstream structure recovery. Confidence values indicate model or method agreement; they are not proof of protocol identity. LDPC, pseudo-random interleaving, unknown symbol timing, and undocumented FEC parameters may require expert input.",
+)

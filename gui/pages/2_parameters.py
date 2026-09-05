@@ -1,37 +1,25 @@
-import streamlit as st
 from pathlib import Path
 
-from gui.theme import apply_radiofry_theme, render_section_explainer
+import streamlit as st
+
+from gui.theme import apply_radiofry_theme, render_empty_state, render_method_note, render_stage_header
 
 apply_radiofry_theme()
-
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-
-
-def _format_value(value: object, unit: str) -> str:
-    return f"{value:,.1f} {unit}" if isinstance(value, (int, float)) else "Unknown"
-
-st.header("Signal Parameters")
-render_section_explainer(
-    "Stage 2: estimate what the signal is doing",
-    "This page answers a simple question: how fast is the signal, how much noise is around it, and how wide is the occupied bandwidth?",
-    "The parameter-estimation stage extracts key channel statistics: occupied bandwidth, SNR, symbol timing, and method metadata. These values provide the foundation for modulation classification and downstream bitstream inspection.",
-    "Check the measured values carefully. If the sample rate is uncertain, the app may use manual overrides or indicate that the estimate needs context before a strong interpretation is made.",
-)
+render_stage_header("02", "Signal parameters", "Measure the recording before interpreting it: occupied bandwidth, noise level, and timing cues.")
 
 report = st.session_state.get("report")
 if report is None:
-    st.info("Analyze a capture on the home page first.")
+    render_empty_state("Analyze a capture on the home page first.", "Parameter estimates are derived from the processed signal.")
 else:
     parameters = report["stages"].get("parameters", {})
     source = report.get("source", {})
-    st.caption(f"Source: {source.get('format', 'unknown')} | samples: {source.get('samples', 0):,} | measured sample rate: {source.get('sample_rate') or 'unknown'}")
+    st.caption(f"{source.get('format', 'unknown').upper()} · {source.get('samples', 0):,} samples · sample rate: {source.get('sample_rate') or 'unknown'}")
     columns = st.columns(3)
-    columns[0].metric("Occupied bandwidth", _format_value(parameters.get("occupied_bandwidth_hz"), "Hz"))
-    columns[1].metric("Estimated SNR", _format_value(parameters.get("snr_db"), "dB"))
-    columns[2].metric("Symbol rate", _format_value(parameters.get("symbol_rate_hz"), "Hz"))
-    st.json(parameters)
-    st.info(f"Estimation method: {parameters.get('method', 'unknown')}. Unknown absolute sample rates require a sensor header or manual input.")
-    plot_path = REPOSITORY_ROOT / "reports" / "accuracy_vs_snr.png"
-    if plot_path.exists():
-        st.image(str(plot_path), caption="Modulation accuracy by SNR")
+    columns[0].metric("Occupied bandwidth", f"{parameters.get('occupied_bandwidth_hz') or 0:,.1f} Hz" if parameters.get("occupied_bandwidth_hz") is not None else "Unknown")
+    columns[1].metric("Estimated SNR", f"{parameters.get('snr_db'):.1f} dB" if parameters.get("snr_db") is not None else "Unknown")
+    columns[2].metric("Symbol rate", f"{parameters.get('symbol_rate_hz'):.1f} Hz" if parameters.get("symbol_rate_hz") is not None else "Unknown")
+
+    st.markdown("<div class='evidence-panel'><div class='evidence-label'>Interpretation</div><p>These values describe the recording conditions. They support later decisions but do not identify a protocol by themselves.</p></div>", unsafe_allow_html=True)
+    with st.expander("All measured fields", expanded=False):
+        st.json(parameters)
+    render_method_note("Method and limits", f"Estimator method: {parameters.get('method', 'unknown')}. Absolute sample-rate and symbol-rate claims depend on reliable sensor metadata or a manual override.")

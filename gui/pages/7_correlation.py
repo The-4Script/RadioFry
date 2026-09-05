@@ -1,32 +1,28 @@
 import streamlit as st
 
-from gui.theme import apply_radiofry_theme, render_section_explainer
+from gui.theme import apply_radiofry_theme, render_bit_preview, render_empty_state, render_method_note, render_stage_header
 
 apply_radiofry_theme()
-
-st.header("Bitstream Correlation")
-render_section_explainer(
-    "Stage 7: look for the signal’s hidden timing rhythm",
-    "A digital transmission often has repeating markers, like a clock or a start-of-message pattern. Correlation helps find those repeating structures and estimate where a frame or header might begin.",
-    "This stage looks for periodicity and known sync patterns. It is a clue-finding step, not proof of a network protocol. It helps explain how the data is framed and where the meaningful information likely starts.",
-    "When it finds a pattern, the app highlights likely header and payload regions to support downstream interpretation and reporting.",
-)
-
 report = st.session_state.get("report")
 correlation = report.get("stages", {}).get("bitstream_analysis", {}).get("correlation") if report else None
-if correlation:
-	st.caption("Correlation evidence is a hypothesis about synchronization and framing. It does not identify payload semantics without protocol knowledge.")
-	st.metric("Sync pattern", correlation.get("sync_pattern") or "Not detected")
-	st.metric("Detected positions", len(correlation.get("sync_positions", [])))
-	st.metric("Estimated period", correlation.get("period") or "Unknown")
-	st.metric("Autocorrelation peak", f"{correlation.get('autocorrelation_peak', 0):.3f}")
-	st.metric("Sync match score", f"{correlation.get('sync_match_score', 0):.1%}")
-	left, right = st.columns(2)
-	with left:
-		st.caption("Header bits")
-		st.code("".join(str(int(bit)) for bit in correlation.get("header_bits", [])[:256]) or "Not detected")
-	with right:
-		st.caption("Payload bits")
-		st.code("".join(str(int(bit)) for bit in correlation.get("payload_bits", [])[:256]) or "Not detected")
+render_stage_header("07", "Bitstream correlation", "Look for repeated markers and likely frame boundaries in the recovered bitstream.", "Available" if correlation else "Waiting", "ready" if correlation else "muted")
+
+if report is None:
+    render_empty_state("Analyze a capture on the home page first.")
+elif not correlation:
+    render_empty_state("Correlation becomes available after demodulation produces bits.")
 else:
-	st.info("Correlation becomes available after demodulation produces bits.")
+    st.caption("Correlation is framing evidence. It does not identify payload semantics or a network protocol by itself.")
+    left, mid, right = st.columns(3)
+    left.metric("Sync pattern", correlation.get("sync_pattern") or "Not detected")
+    mid.metric("Detected positions", len(correlation.get("sync_positions", [])))
+    right.metric("Estimated period", correlation.get("period") or "Unknown")
+    metrics = st.columns(2)
+    metrics[0].metric("Autocorrelation peak", f"{correlation.get('autocorrelation_peak', 0):.3f}")
+    metrics[1].metric("Sync match score", f"{correlation.get('sync_match_score', 0):.1%}")
+    headers, payload = st.columns(2)
+    with headers:
+        render_bit_preview(correlation.get("header_bits", []), "Header candidate", 256)
+    with payload:
+        render_bit_preview(correlation.get("payload_bits", []), "Payload candidate", 256)
+    render_method_note("Method and limits", "The correlation stage searches for periodicity and known synchronization patterns. Header and payload labels are hypotheses that need protocol context for confirmation.")
