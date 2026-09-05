@@ -16,13 +16,16 @@ else:
     with left:
         st.subheader("Classical cross-check")
         st.metric("Family", classical.get("family", "unknown"))
-        st.metric("Confidence", f"{classical.get('confidence', 0):.1%}")
+        st.metric("Classical family confidence", f"{classical.get('confidence', 0):.1%}")
     with right:
         st.subheader("Fused decision")
         st.metric("Decision", fusion.get("label", "Unclassified"))
         st.metric("Trust score", f"{fusion.get('trust_score', 0):.1%}")
+        st.caption("Trust score is a fused value, not the CNN probability.")
+        st.metric("CNN top-1 confidence", f"{prediction.get('confidence', 0):.1%}")
     if prediction.get("available"):
         st.subheader("CNN top predictions")
+        st.caption("CNN confidence is the model softmax probability for each hypothesis.")
         top_k = prediction.get("top_k", [])
         st.bar_chart({label: probability for label, probability in top_k})
         st.table([{"modulation": label, "confidence": f"{probability:.1%}"} for label, probability in top_k])
@@ -34,7 +37,11 @@ else:
     demodulation = report["stages"].get("demodulation", {})
     symbols = demodulation.get("result", {}).get("symbols", []) if demodulation.get("available") else []
     if symbols:
-        points = np.asarray(symbols)
+        st.caption("The 2D view shows symbol locations; the 3D view adds symbol order to reveal phase rotation, drift, and transient clusters.")
+        points = np.asarray([
+            complex(item.get("real", 0.0), item.get("imag", 0.0)) if isinstance(item, dict) else complex(float(item), 0.0)
+            for item in symbols
+        ], dtype=np.complex64)
         figure, axis = plt.subplots(figsize=(5, 4))
         axis.scatter(points.real, points.imag, s=8, alpha=0.6)
         axis.set_xlabel("In-phase")

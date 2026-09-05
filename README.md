@@ -79,6 +79,32 @@ For a local deployment smoke test:
 PYTHONPATH=src streamlit run gui/app.py --server.headless true
 ```
 
+## What to upload for a meaningful test
+
+For modulation, symbol-rate, interleaver, and FEC analysis, upload a baseband
+RF capture rather than an ordinary music recording. The best test file is a
+short WAV containing complex I/Q in two channels, or a headerless interleaved
+IQ file with documented dtype, byte order, sample rate, modulation, and (when
+available) symbol rate. A 5-30 second capture is enough for a demo.
+
+The repository's synthetic generators and the RML2016.10a benchmark are the
+recommended reproducible sources. Public GNU Radio examples and documented
+SDR datasets are also suitable when they preserve baseband samples. Normal
+songs may be uploaded to test WAV ingestion, waveform, spectrogram, and the
+open-set behavior, but the CNN was not trained to interpret music as an RF
+modulation class, so its label must not be presented as a meaningful radio
+identification.
+
+Historical NASA/Voyager audio files can be used as an audio visualization
+demo, but a rendered/sonified recording is not equivalent to raw spacecraft RF
+IQ and cannot support defensible FEC or interleaver claims. Use it only when
+the source documentation confirms the sample format and recording chain.
+
+The modulation CNN is currently trained on the 11 RML2016.10a classes listed in
+the training metrics. Signals outside that distribution are handled with
+confidence/family disagreement and open-set warnings; this system does not
+truthfully claim perfect classification of every possible signal.
+
 ## Current pipeline boundary
 
 `src/ingestion` converts WAV and headerless interleaved IQ into a common

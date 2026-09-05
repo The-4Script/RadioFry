@@ -7,7 +7,7 @@ torch = pytest.importorskip("torch")
 
 import radiofry.pipeline as pipeline
 from radiofry.models.modulation_cnn import ModulationCNN
-from radiofry.reporting.report_builder import build_report, report_json
+from radiofry.reporting.report_builder import build_pdf_report, build_report, report_json
 
 
 def test_modulation_cnn_output_shape() -> None:
@@ -23,6 +23,20 @@ def test_report_serializes_dataclasses_and_numpy_values() -> None:
     loaded = json.loads(report_json(report))
     assert loaded["source"]["samples"] == 8
     assert loaded["stages"]["scores"] == [0.2, 0.8]
+
+
+def test_report_serializes_complex_values_as_coordinates() -> None:
+    loaded = json.loads(report_json(build_report(source={}, stages={"symbols": np.array([1 + 2j])})))
+
+    assert loaded["stages"]["symbols"] == [{"real": 1.0, "imag": 2.0}]
+
+
+def test_pdf_report_is_generated(tmp_path) -> None:
+    output = tmp_path / "report.pdf"
+
+    build_pdf_report(build_report(source={"format": "test"}, stages={}), str(output))
+
+    assert output.read_bytes().startswith(b"%PDF")
 
 
 def test_pipeline_classifies_fec_after_deinterleaving(monkeypatch: pytest.MonkeyPatch) -> None:

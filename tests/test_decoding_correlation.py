@@ -19,6 +19,8 @@ def test_bpsk_demodulator_recovers_bits() -> None:
     result = demodulate_psk(samples, order=2)
 
     np.testing.assert_array_equal(result.bits, [0, 1, 1, 0])
+    assert np.iscomplexobj(result.symbols)
+    np.testing.assert_allclose(np.abs(result.symbols), 1.0)
 
 
 def test_block_interleaver_preserves_bits_and_changes_order() -> None:
@@ -63,6 +65,13 @@ def test_reed_solomon_round_trip() -> None:
 
     assert decoded.success
     np.testing.assert_array_equal(decoded.bits, source)
+
+
+def test_reed_solomon_failure_is_reported_without_crashing() -> None:
+    result = decode_reed_solomon(bytes((index * 37) % 256 for index in range(64)))
+
+    assert not result.success
+    assert "failed" in result.message.lower()
 
 
 def test_convolutional_search_is_available() -> None:

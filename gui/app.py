@@ -1,17 +1,19 @@
 """Streamlit entry point for the RadioFry analysis pipeline."""
 
 from pathlib import Path
+import tempfile
 
 import streamlit as st
 
 from radiofry.ingestion.iq_parser import IQFormat
 from radiofry.pipeline import analyze_capture, load_capture
-from radiofry.reporting.report_builder import build_report, report_json
+from radiofry.reporting.report_builder import build_pdf_report, report_json
 
 
 st.set_page_config(page_title="RadioFry", page_icon="RF", layout="wide")
 st.title("RadioFry")
 st.caption("Hardware-agnostic RF signal analysis")
+st.info("For meaningful RF identification, use baseband I/Q from a documented SDR or a synthetic RF capture. Music and sonified space audio can test visualization, but cannot validate modulation, FEC, or interleaver claims.")
 
 uploaded = st.file_uploader("Upload a WAV or raw IQ capture", type=["wav", "iq"])
 if uploaded is not None:
@@ -63,3 +65,6 @@ if uploaded is not None:
         columns[0].metric("Samples", f"{signal.iq.size:,}")
         columns[1].metric("Sample rate", signal.sample_rate or "Unknown")
         st.download_button("Download JSON report", report_json(report), "radiofry-report.json", "application/json")
+        pdf_path = Path(tempfile.gettempdir()) / "radiofry-report.pdf"
+        build_pdf_report(report, str(pdf_path), signal)
+        st.download_button("Download formal PDF report", pdf_path.read_bytes(), "radiofry-report.pdf", "application/pdf")

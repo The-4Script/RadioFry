@@ -13,4 +13,5 @@ def demodulate_psk(samples: np.ndarray, order: int = 2) -> DemodulationResult:
     indices = np.floor((phases + np.pi / order) / (2 * np.pi / order)).astype(np.uint8) % order
     bits_per_symbol = int(np.log2(order))
     bits = ((indices[:, None] >> np.arange(bits_per_symbol - 1, -1, -1)) & 1).astype(np.uint8).ravel()
-    return DemodulationResult(indices, bits, f"{order}PSK", {"order": order})
+    symbols = np.exp(1j * (2 * np.pi * indices / order)).astype(np.complex64)
+    return DemodulationResult(symbols, bits, f"{order}PSK", {"order": order})

@@ -14,9 +14,11 @@ else:
     left, right = st.columns(2)
     with left:
         st.subheader("I/Q waveform")
+        st.caption("Amplitude versus sample index. DC removal and power normalization are applied before downstream analysis.")
         st.line_chart({"I": preview.real, "Q": preview.imag})
     with right:
         st.subheader("Waterfall")
+        st.caption("Time-frequency energy view. Bright bands indicate concentrated spectral energy, not a modulation verdict by themselves.")
         figure, axis = plt.subplots(figsize=(7, 3.5))
         axis.specgram(preview, NFFT=min(256, max(32, preview.size // 4)), Fs=signal.sample_rate or 1.0, noverlap=32, cmap="viridis")
         axis.set_xlabel("Time")
@@ -24,6 +26,7 @@ else:
         st.pyplot(figure, clear_figure=True)
 
     st.subheader("3D spectral surface")
+    st.caption("Interactive frequency-power landscape across time. Use rotation and zoom to inspect transient emitters, drift, and occupied bands.")
     surface_samples = signal.iq[: min(signal.iq.size, 12000)]
     segment_length = min(256, max(32, surface_samples.size // 8))
     frequencies, times, spectrum = stft(
