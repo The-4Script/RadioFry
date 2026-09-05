@@ -3,10 +3,10 @@ from pathlib import Path
 
 import streamlit as st
 
-from gui.theme import apply_radiofry_theme, render_empty_state, render_method_note, render_stage_header
+from gui.theme import render_empty_state, render_method_note, render_page_shell, render_stage_header
 from radiofry.reporting.report_builder import build_pdf_report, report_json
 
-apply_radiofry_theme()
+render_page_shell(8)
 report = st.session_state.get("report")
 render_stage_header("08", "Report", "Package the findings, confidence, and limitations into an auditable handoff.", "Ready" if report else "Waiting", "ready" if report else "muted")
 

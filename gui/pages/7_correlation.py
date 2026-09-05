@@ -1,8 +1,8 @@
 import streamlit as st
 
-from gui.theme import apply_radiofry_theme, render_bit_preview, render_empty_state, render_method_note, render_stage_header
+from gui.theme import render_bit_preview, render_empty_state, render_method_note, render_page_shell, render_stage_header
 
-apply_radiofry_theme()
+render_page_shell(7)
 report = st.session_state.get("report")
 correlation = report.get("stages", {}).get("bitstream_analysis", {}).get("correlation") if report else None
 render_stage_header("07", "Bitstream correlation", "Look for repeated markers and likely frame boundaries in the recovered bitstream.", "Available" if correlation else "Waiting", "ready" if correlation else "muted")

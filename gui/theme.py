@@ -1,4 +1,5 @@
 import streamlit as st
+from streamlit.errors import StreamlitPageNotFoundError
 
 
 STAGES = [
@@ -110,6 +111,8 @@ def apply_radiofry_theme() -> None:
         .sidebar-stage.active { border-left-color: var(--teal); background: rgba(81,213,194,0.08); }
         .sidebar-stage-number { color: var(--teal); font-size: 0.68rem; font-weight: 800; }
         .sidebar-stage-name { font-size: 0.86rem; }
+        .portal-link { align-items: center; border-radius: 6px; color: #dce9e6 !important; display: flex; font-size: 0.86rem; gap: 0.55rem; padding: 0.35rem 0.45rem; text-decoration: none !important; }
+        .portal-link:hover { background: rgba(81,213,194,0.1); color: var(--teal) !important; }
         .tour-shell { background: #111d24; border: 1px solid #33515a; border-radius: 14px; padding: 1.2rem 1.35rem 1.1rem; box-shadow: 0 18px 42px rgba(0,0,0,0.2); }
         .tour-kicker { color: var(--teal); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
         .tour-title { color: var(--ink); font-size: 1.6rem; font-weight: 750; margin: 0.35rem 0 0.5rem; }
@@ -167,15 +170,22 @@ def render_sidebar(active_stage: int, has_analysis: bool) -> None:
         st.caption("Evidence first. Confidence visible. Review encouraged.")
         st.divider()
         st.markdown("<div class='evidence-label'>Navigate</div>", unsafe_allow_html=True)
-        st.page_link("app.py", label="Overview", icon=":material/home:")
-        st.page_link("pages/1_upload_preview.py", label="Upload & preview", icon=":material/waves:")
-        st.page_link("pages/2_parameters.py", label="Parameters", icon=":material/tune:")
-        st.page_link("pages/3_modulation.py", label="Modulation", icon=":material/hub:")
-        st.page_link("pages/4_demodulation.py", label="Demodulation", icon=":material/transform:")
-        st.page_link("pages/5_deinterleaving.py", label="Deinterleaving", icon=":material/reorder:")
-        st.page_link("pages/6_fec_decoding.py", label="FEC decoding", icon=":material/shield:")
-        st.page_link("pages/7_correlation.py", label="Correlation", icon=":material/track_changes:")
-        st.page_link("pages/8_report.py", label="Report", icon=":material/description:")
+        navigation = [
+            ("app.py", "/", "⌂", "Overview"),
+            ("pages/1_upload_preview.py", "/upload_preview", "∿", "Upload & preview"),
+            ("pages/2_parameters.py", "/parameters", "≋", "Parameters"),
+            ("pages/3_modulation.py", "/modulation", "◈", "Modulation"),
+            ("pages/4_demodulation.py", "/demodulation", "↝", "Demodulation"),
+            ("pages/5_deinterleaving.py", "/deinterleaving", "⇄", "Deinterleaving"),
+            ("pages/6_fec_decoding.py", "/fec_decoding", "◇", "FEC decoding"),
+            ("pages/7_correlation.py", "/correlation", "◎", "Correlation"),
+            ("pages/8_report.py", "/report", "▤", "Report"),
+        ]
+        for page, href, icon, label in navigation:
+            try:
+                st.page_link(page, label=label)
+            except StreamlitPageNotFoundError:
+                st.markdown(f"<a class='portal-link' href='{href}'><span>{icon}</span><span>{label}</span></a>", unsafe_allow_html=True)
         st.divider()
         st.markdown("<div class='evidence-label'>Progress</div>", unsafe_allow_html=True)
         for index, (number, name) in enumerate(STAGES, start=1):
@@ -188,6 +198,11 @@ def render_sidebar(active_stage: int, has_analysis: bool) -> None:
             st.session_state["tour_step"] = 0
             st.rerun()
         st.caption("A quick guided walk through the workflow for juries and first-time reviewers.")
+
+
+def render_page_shell(active_stage: int) -> None:
+    apply_radiofry_theme()
+    render_sidebar(active_stage=active_stage, has_analysis="report" in st.session_state)
 
 
 def render_site_tour() -> None:

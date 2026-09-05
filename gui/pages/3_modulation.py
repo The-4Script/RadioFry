@@ -3,13 +3,13 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
-from gui.theme import apply_radiofry_theme, render_empty_state, render_method_note, render_stage_header
+from gui.theme import render_empty_state, render_method_note, render_page_shell, render_stage_header
 
-apply_radiofry_theme()
+render_page_shell(3)
 report = st.session_state.get("report")
 modulation = report["stages"].get("fusion", {}) if report else {}
-status = "Review" if modulation.get("review_recommended") else "Ready"
-status_kind = "review" if modulation.get("review_recommended") else "ready"
+status = "Review" if report is not None and modulation.get("review_recommended") else ("Ready" if report is not None else "Waiting")
+status_kind = "review" if report is not None and modulation.get("review_recommended") else ("ready" if report is not None else "muted")
 render_stage_header("03", "Modulation", "Compare independent signal evidence before choosing a modulation hypothesis.", status, status_kind)
 
 if report is None:

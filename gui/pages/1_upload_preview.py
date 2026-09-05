@@ -4,9 +4,9 @@ import plotly.graph_objects as go
 import streamlit as st
 from scipy.signal import stft
 
-from gui.theme import apply_radiofry_theme, render_empty_state, render_method_note, render_stage_header
+from gui.theme import render_empty_state, render_method_note, render_page_shell, render_stage_header
 
-apply_radiofry_theme()
+render_page_shell(1)
 signal = st.session_state.get("signal")
 render_stage_header(
     "01",

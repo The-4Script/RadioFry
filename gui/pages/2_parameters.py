@@ -2,12 +2,14 @@ from pathlib import Path
 
 import streamlit as st
 
-from gui.theme import apply_radiofry_theme, render_empty_state, render_method_note, render_stage_header
+from gui.theme import render_empty_state, render_method_note, render_page_shell, render_stage_header
 
-apply_radiofry_theme()
-render_stage_header("02", "Signal parameters", "Measure the recording before interpreting it: occupied bandwidth, noise level, and timing cues.")
-
+render_page_shell(2)
 report = st.session_state.get("report")
+status = "Ready" if report is not None else "Waiting"
+status_kind = "ready" if report is not None else "muted"
+render_stage_header("02", "Signal parameters", "Measure the recording before interpreting it: occupied bandwidth, noise level, and timing cues.", status, status_kind)
+
 if report is None:
     render_empty_state("Analyze a capture on the home page first.", "Parameter estimates are derived from the processed signal.")
 else:

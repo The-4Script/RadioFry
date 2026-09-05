@@ -1,8 +1,8 @@
 import streamlit as st
 
-from gui.theme import apply_radiofry_theme, render_bit_preview, render_empty_state, render_method_note, render_stage_header
+from gui.theme import render_bit_preview, render_empty_state, render_method_note, render_page_shell, render_stage_header
 
-apply_radiofry_theme()
+render_page_shell(4)
 report = st.session_state.get("report")
 demodulation = report.get("stages", {}).get("demodulation", {}) if report else {}
 status = "Available" if demodulation.get("available") else "Needs review"
