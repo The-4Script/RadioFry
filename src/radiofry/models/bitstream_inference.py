@@ -48,7 +48,10 @@ def predict_bitstream(bits: np.ndarray, model_path: str | Path) -> BitstreamPred
         metrics = json.loads(metrics_file.read_text(encoding="utf-8"))
         if metrics.get("model_sha256") != actual_hash:
             return BitstreamPrediction("unknown", 0.0, False, "Classifier artifact integrity check failed: metrics do not match model.")
-        features = bit_features(values).reshape(1, -1)
+        max_lag = int(metrics.get("max_lag", 32))
+        if max_lag < 1:
+            return BitstreamPrediction("unknown", 0.0, False, "Classifier metrics contain an invalid autocorrelation window.")
+        features = bit_features(values, max_lag=max_lag).reshape(1, -1)
         expected_features = getattr(model, "n_features_in_", features.shape[1])
         if int(expected_features) != features.shape[1]:
             return BitstreamPrediction(

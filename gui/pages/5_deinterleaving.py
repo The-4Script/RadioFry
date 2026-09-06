@@ -22,7 +22,7 @@ else:
     right.metric("Confidence", f"{prediction.get('confidence', 0):.1%}")
     metrics = load_model_metrics(Path(__file__).resolve().parents[2] / "models_saved" / "interleaver_classifier.pkl")
     if metrics:
-        st.caption(f"Measured synthetic-data test accuracy: {metrics.get('test_accuracy', 0):.1%}; 5-fold CV: {metrics.get('cv_accuracy_mean', 0):.1%} +/- {metrics.get('cv_accuracy_std', 0):.1%}. This does not estimate real-signal accuracy.")
+        st.caption(f"Measured structured-synthetic test accuracy: {metrics.get('test_accuracy', 0):.1%}; 5-fold CV: {metrics.get('cv_accuracy_mean', 0):.1%} +/- {metrics.get('cv_accuracy_std', 0):.1%}. This does not estimate real-signal accuracy.")
     st.caption(f"Selected method: {analysis.get('selected_interleaver', 'unknown')}")
     if not prediction.get("available", True):
         st.warning(prediction.get("message", "Interleaver classifier unavailable."))

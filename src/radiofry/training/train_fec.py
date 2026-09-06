@@ -11,7 +11,16 @@ from radiofry.synthetic_gen.features import bit_features
 from radiofry.models.artifact_integrity import hash_bytes, serialize_sklearn_model
 
 
-def train_fec(manifest_path: str | Path, output_path: str | Path, *, seed: int = 7) -> dict[str, object]:
+def train_fec(
+    manifest_path: str | Path,
+    output_path: str | Path,
+    *,
+    seed: int = 7,
+    max_lag: int = 32,
+    n_estimators: int = 200,
+    max_depth: int | None = None,
+    min_samples_leaf: int = 1,
+) -> dict[str, object]:
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.metrics import accuracy_score, confusion_matrix
     from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
@@ -20,14 +29,14 @@ def train_fec(manifest_path: str | Path, output_path: str | Path, *, seed: int =
     rows = [row for row in csv.DictReader(manifest.open(encoding="utf-8")) if row.get("filename")]
     if not rows:
         raise ValueError(f"Manifest contains no usable samples: {manifest}")
-    features = np.vstack([bit_features(np.load(manifest.parent / row["filename"])) for row in rows])
+    features = np.vstack([bit_features(np.load(manifest.parent / row["filename"]), max_lag=max_lag) for row in rows])
     labels = np.array([row["fec_type"] for row in rows])
     class_names = sorted(np.unique(labels).tolist())
     train_x, test_x, train_y, test_y = train_test_split(features, labels, test_size=0.2, random_state=seed, stratify=labels)
-    model = RandomForestClassifier(n_estimators=200, random_state=seed, n_jobs=-1).fit(train_x, train_y)
+    model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, min_samples_leaf=min_samples_leaf, random_state=seed, n_jobs=-1).fit(train_x, train_y)
     predictions = model.predict(test_x)
     folds = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
-    cv_scores = cross_val_score(RandomForestClassifier(n_estimators=200, random_state=seed, n_jobs=-1), features, labels, cv=folds, scoring="accuracy", n_jobs=1)
+    cv_scores = cross_val_score(RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, min_samples_leaf=min_samples_leaf, random_state=seed, n_jobs=-1), features, labels, cv=folds, scoring="accuracy", n_jobs=1)
     model_bytes = serialize_sklearn_model(model)
     model_sha256 = hash_bytes(model_bytes)
     metrics: dict[str, object] = {
@@ -41,6 +50,10 @@ def train_fec(manifest_path: str | Path, output_path: str | Path, *, seed: int =
         "confusion_matrix": confusion_matrix(test_y, predictions, labels=class_names).tolist(),
         "feature_importances": model.feature_importances_.tolist(),
         "seed": seed,
+        "max_lag": max_lag,
+        "n_estimators": n_estimators,
+        "max_depth": max_depth,
+        "min_samples_leaf": min_samples_leaf,
     }
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -57,8 +70,12 @@ def main() -> None:
     parser.add_argument("--manifest", default="data/synthetic/fec/fec_manifest.csv")
     parser.add_argument("--output", default="models_saved/fec_classifier.pkl")
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--max-lag", type=int, default=32)
+    parser.add_argument("--n-estimators", type=int, default=200)
+    parser.add_argument("--max-depth", type=int, default=None)
+    parser.add_argument("--min-samples-leaf", type=int, default=1)
     args = parser.parse_args()
-    print(json.dumps(train_fec(args.manifest, args.output, seed=args.seed), indent=2))
+    print(json.dumps(train_fec(args.manifest, args.output, seed=args.seed, max_lag=args.max_lag, n_estimators=args.n_estimators, max_depth=args.max_depth, min_samples_leaf=args.min_samples_leaf), indent=2))
 
 
 if __name__ == "__main__":
