@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from radiofry.synthetic_gen.features import bit_features
+from radiofry.models.artifact_integrity import hash_bytes, serialize_sklearn_model
 
 
 def train_fec(manifest_path: str | Path, output_path: str | Path, *, seed: int = 7) -> dict[str, object]:
@@ -27,7 +28,10 @@ def train_fec(manifest_path: str | Path, output_path: str | Path, *, seed: int =
     predictions = model.predict(test_x)
     folds = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
     cv_scores = cross_val_score(RandomForestClassifier(n_estimators=200, random_state=seed, n_jobs=-1), features, labels, cv=folds, scoring="accuracy", n_jobs=1)
+    model_bytes = serialize_sklearn_model(model)
+    model_sha256 = hash_bytes(model_bytes)
     metrics: dict[str, object] = {
+        "model_sha256": model_sha256,
         "samples": int(len(rows)),
         "classes": class_names,
         "feature_count": int(features.shape[1]),
@@ -41,7 +45,7 @@ def train_fec(manifest_path: str | Path, output_path: str | Path, *, seed: int =
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("wb") as handle:
-        pickle.dump(model, handle)
+        pickle.dump({"model_bytes": model_bytes, "model_sha256": model_sha256}, handle)
     output.with_name(f"{output.stem}_metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     return metrics
 

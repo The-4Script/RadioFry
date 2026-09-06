@@ -1,6 +1,8 @@
 import streamlit as st
+from pathlib import Path
 
 from gui.theme import render_bit_preview, render_empty_state, render_method_note, render_page_shell, render_stage_header
+from gui.model_metrics import load_model_metrics
 
 render_page_shell(6)
 report = st.session_state.get("report")
@@ -20,6 +22,9 @@ else:
     left.metric("Predicted scheme", prediction.get("label", "Unknown"))
     mid.metric("Confidence", f"{prediction.get('confidence', 0):.1%}")
     right.metric("Decoded bits", f"{len(result.get('bits', [])):,}")
+    metrics = load_model_metrics(Path(__file__).resolve().parents[2] / "models_saved" / "fec_classifier.pkl")
+    if metrics:
+        st.caption(f"Measured synthetic-data test accuracy: {metrics.get('test_accuracy', 0):.1%}; 5-fold CV: {metrics.get('cv_accuracy_mean', 0):.1%} +/- {metrics.get('cv_accuracy_std', 0):.1%}. This does not estimate real-signal accuracy.")
     st.caption(f"Selected scheme: {analysis.get('selected_fec', 'unknown')}")
     if not prediction.get("available", True):
         st.warning(prediction.get("message", "FEC classifier unavailable."))

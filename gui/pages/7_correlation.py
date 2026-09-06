@@ -1,11 +1,13 @@
 import streamlit as st
 
 from gui.theme import render_bit_preview, render_empty_state, render_method_note, render_page_shell, render_stage_header
+from gui.status import correlation_status
 
 render_page_shell(7)
 report = st.session_state.get("report")
 correlation = report.get("stages", {}).get("bitstream_analysis", {}).get("correlation") if report else None
-render_stage_header("07", "Bitstream correlation", "Look for repeated markers and likely frame boundaries in the recovered bitstream.", "Available" if correlation else "Waiting", "ready" if correlation else "muted")
+correlation_label, correlation_kind = correlation_status(correlation)
+render_stage_header("07", "Bitstream correlation", "Look for repeated markers and likely frame boundaries in the recovered bitstream.", correlation_label, correlation_kind)
 
 if report is None:
     render_empty_state("Analyze a capture on the home page first.")
@@ -16,7 +18,8 @@ else:
     left, mid, right = st.columns(3)
     left.metric("Sync pattern", correlation.get("sync_pattern") or "Not detected")
     mid.metric("Detected positions", len(correlation.get("sync_positions", [])))
-    right.metric("Estimated period", correlation.get("period") or "Unknown")
+    period = correlation.get("period")
+    right.metric("Estimated period", period if period is not None else "Unknown")
     metrics = st.columns(2)
     metrics[0].metric("Autocorrelation peak", f"{correlation.get('autocorrelation_peak', 0):.3f}")
     metrics[1].metric("Sync match score", f"{correlation.get('sync_match_score', 0):.1%}")

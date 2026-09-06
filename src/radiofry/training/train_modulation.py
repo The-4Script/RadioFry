@@ -10,6 +10,8 @@ from typing import Any
 
 import numpy as np
 
+from radiofry.models.artifact_integrity import hash_torch_state_dict
+
 
 def main() -> None:
     import argparse
@@ -299,7 +301,7 @@ def train_modulation(
         if validation_loss < best_loss:
             best_loss, stale_epochs = validation_loss, 0
             best_state = {key: value.detach().clone() for key, value in model.state_dict().items()}
-            checkpoint = {"state_dict": best_state, "labels": labels, "input_channels": input_channels, "sample_length": sample_length or frames.shape[2], "features": features, "dataset": str(data_path), "seed": seed, "best_epoch": epoch, "best_validation_loss": best_loss}
+            checkpoint = {"state_dict": best_state, "model_sha256": hash_torch_state_dict(best_state), "labels": labels, "input_channels": input_channels, "sample_length": sample_length or frames.shape[2], "features": features, "dataset": str(data_path), "seed": seed, "best_epoch": epoch, "best_validation_loss": best_loss}
             temporary_output = output.with_suffix(output.suffix + ".tmp")
             torch.save(checkpoint, temporary_output)
             temporary_output.replace(output)
@@ -334,7 +336,7 @@ def train_modulation(
     accuracy_by_snr = {str(int(snr)): float(np.mean(predictions[test_snrs == snr] == test_targets[test_snrs == snr])) for snr in sorted(set(test_snrs))}
     metrics_path = output.with_name(f"{output.stem}_metrics.json")
     metrics = {
-        "samples": int(len(targets)), "classes": labels, "epochs_completed": completed_epochs, "device": str(selected_device), "dataset": str(data_path), "sample_length": int(sample_length or frames.shape[2]), "features": features, "seed": seed, "best_validation_loss": best_loss,
+        "model_sha256": hash_torch_state_dict(best_state), "samples": int(len(targets)), "classes": labels, "epochs_completed": completed_epochs, "device": str(selected_device), "dataset": str(data_path), "sample_length": int(sample_length or frames.shape[2]), "features": features, "seed": seed, "best_validation_loss": best_loss,
         "test_accuracy": float(np.mean(predictions == test_targets)),
         "accuracy_by_snr": accuracy_by_snr, "confusion_matrices": confusion,
         "split_sizes": {"train": len(train_idx), "validation": len(val_idx), "test": len(test_idx)},

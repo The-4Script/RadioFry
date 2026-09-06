@@ -6,7 +6,7 @@ evidence. The implementation follows the SIH26147 architecture.
 
 ## Inference setup
 
-The supported runtime is Python 3.11 through 3.14. Create an environment and
+The supported runtime is Python 3.11, which is the version exercised by CI. Create an environment and
 install the inference application dependencies:
 
 ```bash

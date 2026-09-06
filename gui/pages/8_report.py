@@ -4,6 +4,7 @@ from pathlib import Path
 import streamlit as st
 
 from gui.theme import render_empty_state, render_method_note, render_page_shell, render_stage_header
+from gui.status import correlation_status
 from radiofry.reporting.report_builder import build_pdf_report, report_json
 
 render_page_shell(8)
@@ -17,6 +18,7 @@ else:
     stages = report.get("stages", {})
     fusion = stages.get("fusion", {})
     bitstream = stages.get("bitstream_analysis", {})
+    correlation = bitstream.get("correlation", {})
     st.markdown("<div class='evidence-panel'><div class='evidence-label'>Executive readout</div><h3>{}</h3><p>Trust score: {:.1%}. {}.</p></div>".format(fusion.get("label", "Unclassified"), fusion.get("trust_score", 0), "Human review is recommended" if fusion.get("review_recommended") else "The fused decision is available for inspection"), unsafe_allow_html=True)
     left, mid, right = st.columns(3)
     left.metric("Source", str(source.get("format", "unknown")).upper())
@@ -31,7 +33,7 @@ else:
         ("Demodulation", stages.get("demodulation", {}).get("available", False)),
         ("Bitstream analysis", bitstream.get("available", False)),
         ("FEC recovery", bitstream.get("fec_decoding", {}).get("success", False)),
-        ("Correlation", "correlation" in bitstream),
+        ("Correlation", correlation_status(correlation)[0] == "Available"),
     ]:
         status_rows.append({"stage": label, "status": "Available" if value else "Needs review"})
     st.table(status_rows)
@@ -59,7 +61,8 @@ else:
             st.session_state["pdf_report_key"] = report_key
         if st.button("Prepare PDF", use_container_width=True):
             pdf_path = Path(tempfile.gettempdir()) / "radiofry-report.pdf"
-            build_pdf_report(report, str(pdf_path), signal)
+            with st.spinner("Generating PDF report..."):
+                build_pdf_report(report, str(pdf_path), signal)
             st.session_state["pdf_report_bytes"] = pdf_path.read_bytes()
         if st.session_state.get("pdf_report_bytes"):
             st.download_button("Download PDF", st.session_state["pdf_report_bytes"], "radiofry-report.pdf", "application/pdf", use_container_width=True)

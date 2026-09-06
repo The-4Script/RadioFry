@@ -1,25 +1,10 @@
-import json
-from pathlib import Path
-
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
 from gui.theme import render_empty_state, render_method_note, render_page_shell, render_stage_header
-from radiofry.models.modulation_metrics import expected_accuracy_at_snr
-
-
-def _expected_cnn_accuracy(snr_db: float | None) -> float | None:
-    if snr_db is None:
-        return None
-    metrics_path = Path(__file__).resolve().parents[2] / "models_saved" / "modulation_cnn_metrics.json"
-    try:
-        metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-        points = sorted((float(snr), float(accuracy)) for snr, accuracy in metrics["accuracy_by_snr"].items())
-    except (OSError, KeyError, TypeError, ValueError):
-        return None
-    return expected_accuracy_at_snr(metrics, snr_db)
+from gui.modulation_helpers import LOW_SNR_BIAS_WARNING, LOW_SNR_BIAS_WARNING_THRESHOLD_DB, _expected_cnn_accuracy, load_modulation_metrics, low_snr_bias_labels
 
 render_page_shell(3)
 report = st.session_state.get("report")
@@ -44,7 +29,8 @@ else:
     with right:
         st.markdown("<div class='evidence-panel'><h3>Fused hypothesis</h3>", unsafe_allow_html=True)
         st.metric("Decision", fusion.get("label", "Unclassified"))
-        st.metric("Trust score", f"{fusion.get('trust_score', 0):.1%}")
+        st.metric("Fused trust score (heuristic)", f"{fusion.get('trust_score', 0):.1%}")
+        st.caption("Agreement-adjusted score; not a calibrated probability.")
         st.caption(f"CNN top-1: {prediction.get('confidence', 0):.1%}")
         expected_accuracy = _expected_cnn_accuracy(parameters.get("snr_db"))
         if expected_accuracy is not None:
@@ -57,6 +43,11 @@ else:
         st.bar_chart({label: probability for label, probability in top_k})
     else:
         st.warning(prediction.get("message", "CNN inference is unavailable."))
+    modulation_metrics = load_modulation_metrics()
+    estimated_snr = parameters.get("snr_db")
+    biased_labels = low_snr_bias_labels(modulation_metrics or {})
+    if estimated_snr is not None and estimated_snr < LOW_SNR_BIAS_WARNING_THRESHOLD_DB and prediction.get("label") in biased_labels:
+        st.warning(LOW_SNR_BIAS_WARNING)
     if fusion.get("review_recommended"):
         st.warning("Review recommended: confidence is low or independent evidence disagrees.")
 

@@ -1,6 +1,7 @@
 """Streamlit entry point for the RadioFry analysis pipeline."""
 
 from pathlib import Path
+import atexit
 import sys
 import tempfile
 
@@ -14,6 +15,10 @@ from gui.theme import apply_radiofry_theme, render_method_note, render_sidebar
 from radiofry.ingestion.iq_parser import IQFormat
 from radiofry.pipeline import DEFAULT_MAX_CAPTURE_BYTES, analyze_capture, load_capture
 from radiofry.reporting.report_builder import build_pdf_report, report_json
+
+
+def _cleanup_upload(path: Path) -> None:
+    path.unlink(missing_ok=True)
 
 
 st.set_page_config(page_title="RadioFry", page_icon="RF", layout="wide")
@@ -57,6 +62,7 @@ if uploaded is not None:
         with tempfile.NamedTemporaryFile(prefix="radiofry-", suffix=suffix, delete=False) as temporary_file:
             temporary_path = Path(temporary_file.name)
         temporary_path.write_bytes(uploaded.getvalue())
+        atexit.register(_cleanup_upload, temporary_path)
         st.session_state["upload_path"] = str(temporary_path)
         st.session_state["upload_name"] = uploaded.name
 
@@ -124,7 +130,8 @@ if uploaded is not None:
                 st.session_state["pdf_report_key"] = report_key
             if st.button("Prepare PDF", use_container_width=True):
                 pdf_path = Path(tempfile.gettempdir()) / "radiofry-report.pdf"
-                build_pdf_report(report, str(pdf_path), signal)
+                with st.spinner("Generating PDF report..."):
+                    build_pdf_report(report, str(pdf_path), signal)
                 st.session_state["pdf_report_bytes"] = pdf_path.read_bytes()
             if st.session_state.get("pdf_report_bytes"):
                 st.download_button("Download PDF", st.session_state["pdf_report_bytes"], "radiofry-report.pdf", "application/pdf", use_container_width=True)

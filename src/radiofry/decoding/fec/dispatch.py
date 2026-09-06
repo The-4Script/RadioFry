@@ -5,7 +5,7 @@ import numpy as np
 from .concatenated_wrapper import decode_concatenated
 from .ldpc_wrapper import decode_ldpc
 from .rs_wrapper import decode_reed_solomon
-from .viterbi_wrapper import FECResult
+from .viterbi_wrapper import FECResult, decode_convolutional
 
 
 def decode_fec(bits: np.ndarray, scheme: str) -> FECResult:
@@ -13,7 +13,7 @@ def decode_fec(bits: np.ndarray, scheme: str) -> FECResult:
     if scheme in {"none", "unknown", ""}:
         return FECResult(values, "none", True, "No FEC decoding applied.")
     if scheme == "convolutional":
-        return __import__("radiofry.decoding.fec.viterbi_wrapper", fromlist=["decode_convolutional"]).decode_convolutional(values)
+        return decode_convolutional(values)
     if scheme == "reed_solomon":
         usable = (values.size // 8) * 8
         return decode_reed_solomon(np.packbits(values[:usable]).tobytes())

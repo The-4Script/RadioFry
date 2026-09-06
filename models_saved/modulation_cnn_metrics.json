@@ -479,5 +479,6 @@
     "train": 154000,
     "validation": 33000,
     "test": 33000
-  }
+  },
+  "model_sha256": "17b2a7142cbb33b480d6fafa6d1b4a3f30625a6a7d8f9136caaccd0d844b854d"
 }

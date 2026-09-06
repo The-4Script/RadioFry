@@ -1,9 +1,11 @@
 from pathlib import Path
+import json
 import pickle
 
 import numpy as np
 
 from radiofry.models.bitstream_inference import predict_bitstream
+from radiofry.models.artifact_integrity import hash_bytes, serialize_sklearn_model
 from radiofry.synthetic_gen.generate_dataset import generate_interleaver_dataset
 
 
@@ -35,8 +37,11 @@ def test_bitstream_inference_reports_feature_mismatch(tmp_path: Path) -> None:
     )
 
     model_path = tmp_path / "classifier.pkl"
+    model_bytes = serialize_sklearn_model(model)
+    model_hash = hash_bytes(model_bytes)
     with model_path.open("wb") as handle:
-        pickle.dump(model, handle)
+        pickle.dump({"model_bytes": model_bytes, "model_sha256": model_hash}, handle)
+    model_path.with_name("classifier_metrics.json").write_text(json.dumps({"model_sha256": model_hash}), encoding="utf-8")
 
     result = predict_bitstream(np.zeros(128, dtype=np.uint8), model_path)
 
