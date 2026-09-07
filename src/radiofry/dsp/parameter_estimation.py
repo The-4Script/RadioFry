@@ -16,6 +16,24 @@ class ParameterEstimate:
     method: str = "welch_nth_power"
     carrier_frequency_hz: float | None = None
     symbol_rate_confidence: float | None = None
+    symbol_rate_feature: str | None = None
+
+
+def _phase_second_difference(samples: np.ndarray) -> np.ndarray:
+    frequency = np.diff(np.unwrap(np.angle(samples)), prepend=0.0)
+    return np.diff(frequency, prepend=0.0) ** 2
+
+
+# Pre-FFT nonlinearities searched for a symbol-rate spectral line. Envelope power is
+# the classical squaring method and carries a timing tone only when pulses overlap;
+# full-duty rectangular pulses put an exact null at the symbol rate, and constant-
+# modulus constellations flatten the feature entirely. The transition and phase-step
+# features cover those cases. See BANK.md Entries 003-004 for the measured comparison.
+SYMBOL_RATE_FEATURES = {
+    "envelope_power": lambda samples: np.abs(samples) ** 2,
+    "transition_power": lambda samples: np.abs(np.diff(samples, prepend=samples[0])) ** 2,
+    "phase_second_difference": _phase_second_difference,
+}
 
 
 def _occupied_band(psd: np.ndarray, frequencies: np.ndarray, fraction: float) -> tuple[float, float]:
@@ -61,6 +79,21 @@ def _select_symbol_rate(
     return float(rates[peaks[selected]]), confidence
 
 
+def _symbol_rate_candidate(powered: np.ndarray, sample_rate: float) -> tuple[float | None, float | None]:
+    """Score one pre-FFT feature through the existing peak search and selector."""
+
+    spectrum = np.abs(np.fft.rfft(powered - np.mean(powered)))
+    rates = np.fft.rfftfreq(powered.size, d=1 / sample_rate)
+    spectrum[0] = 0
+    peaks, properties = find_peaks(spectrum, prominence=max(float(np.median(spectrum)) * 2.0, 1e-12))
+    return _select_symbol_rate(
+        rates,
+        spectrum,
+        peaks,
+        properties.get("prominences", np.array([], dtype=float)),
+    )
+
+
 def estimate_parameters(
     signal: UnifiedSignalContainer,
     *,
@@ -89,15 +122,19 @@ def estimate_parameters(
     parameter_method = "hardware_center_frequency+welch_nth_power" if metadata_center is not None else "welch_psd_centroid+nth_power"
 
     centered = signal.iq - np.mean(signal.iq)
-    powered = np.abs(centered) ** 2
-    spectrum = np.abs(np.fft.rfft(powered - np.mean(powered)))
-    rates = np.fft.rfftfreq(powered.size, d=1 / signal.sample_rate)
-    spectrum[0] = 0
-    peaks, properties = find_peaks(spectrum, prominence=max(float(np.median(spectrum)) * 2.0, 1e-12))
-    symbol_rate, symbol_rate_confidence = _select_symbol_rate(
-        rates,
-        spectrum,
-        peaks,
-        properties.get("prominences", np.array([], dtype=float)),
+    symbol_rate, symbol_rate_confidence, symbol_rate_feature = None, None, None
+    for name, feature in SYMBOL_RATE_FEATURES.items():
+        rate, confidence = _symbol_rate_candidate(feature(centered), signal.sample_rate)
+        if rate is None or confidence is None:
+            continue
+        if symbol_rate_confidence is None or confidence > symbol_rate_confidence:
+            symbol_rate, symbol_rate_confidence, symbol_rate_feature = rate, confidence, name
+    return ParameterEstimate(
+        abs(upper - lower),
+        snr_db,
+        symbol_rate,
+        parameter_method,
+        carrier_frequency,
+        symbol_rate_confidence,
+        symbol_rate_feature,
     )
-    return ParameterEstimate(abs(upper - lower), snr_db, symbol_rate, parameter_method, carrier_frequency, symbol_rate_confidence)
