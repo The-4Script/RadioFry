@@ -110,8 +110,10 @@ def test_expected_family_maps_v1_families_to_radiofry_vocabulary() -> None:
 
 
 def test_expected_family_rejects_an_unknown_family() -> None:
+    # "analog" was the example here until Entry 019 deliberately made it a supported
+    # family, so an actually-unknown value is used instead.
     with pytest.raises(KeyError):
-        expected_family_for("analog")
+        expected_family_for("not_a_family")
 
 
 def test_signed_error_and_relative_error_propagate_missing_estimates() -> None:

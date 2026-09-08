@@ -2099,3 +2099,604 @@ reports/v2_newmodel/                          added (frozen V1 evaluation with t
 
 No DSP, fusion, demodulator, generator or frozen-V1 artefact was modified. Full suite:
 **358 passed** (up from 344), same single pre-existing `reedsolo` failure.
+
+---
+
+## Entry 016 - 2026-09-08 - V2.0: add PAM4 and GFSK generator support (6 -> 8 classes)
+
+Scoped follow-up to the 11-class audit. No training run was launched. The frozen V1
+dataset is byte-identical (aggregate .iq SHA-256 `d6d3f918687d0700a43e46211c3f04b9`,
+40 captures - the same value recorded in Entry 015). `dispatch.py` (99 lines) and
+`fsk_demod.py` (15 lines) were **not** touched, and no PAM4 demodulator was added.
+
+### PAM4 - fits the existing constellation abstraction cleanly
+
+No blocker. PAM4 is a memoryless real-axis constellation, so it drops into the existing
+`constellation_for` / `modulate` path with one new family branch.
+
+- `MODULATIONS["PAM4"] = ModulationSpec("PAM4", "pam", 4, 2, "PAM4")`.
+- `constellation_for` gains a `pam` branch: levels `[-3,-1,1,3]` normalised to unit
+  average symbol power, i.e. divided by sqrt(5).
+- `modulate()` needed **no change** - the non-FSK branch already routes through
+  `constellation_for`.
+- Bit mapping is the existing natural-binary MSB-first convention, so the
+  `source_bits` / `transmitted_bits` / BER contract is untouched.
+
+**Measured:** the constellation is four real levels at unit average power, index k maps
+to ascending level k, and a noiseless capture recovers the **exact** source bits through
+an independent nearest-point oracle.
+
+### GFSK - Gaussian frequency pulse on the existing FSK path
+
+- `ModulationSpec` gains `default_pulse_shape` (default `"rect"`).
+- `MODULATIONS["GFSK"] = ModulationSpec("GFSK", "fsk", 2, 1, "GFSK",
+  default_pulse_shape="gaussian")` - same family as BFSK, differing only in pulse shape.
+- `SampleSpec.pulse_shape` becomes `str | None`, resolving to the modulation's default;
+  `SUPPORTED_PULSE_SHAPES = ("rect", "gaussian")`. Gaussian is rejected for non-FSK
+  families. New `gaussian_bt` field resolves to `DEFAULT_GAUSSIAN_BT = 0.3` and is
+  rejected when the pulse is rectangular.
+- New `gaussian_frequency_pulse(bt, sps, span_symbols=4)`: sigma = sqrt(ln2)/(2*pi*BT),
+  taps normalised to **unit area**.
+- `_modulate_cpfsk` convolves the rectangular frequency-pulse train with those taps
+  **only** when `pulse_shape == "gaussian"`, so CPFSK generation is bit-for-bit unchanged.
+
+**Measured properties:**
+
+| Property | CPFSK | GFSK | Note |
+|---|---|---|---|
+| Pulse tap sum | - | **1.000000** | unit area preserves the modulation index |
+| Total accumulated phase (rad) | -6.087 | -6.180 | 1.5% apart - finite `same`-convolution edge effect |
+| Peak instantaneous freq (Hz) | 6250.0 | **6250.0** | deviation never exceeded, no overshoot |
+| Mean absolute freq (Hz) | 6250.0 | 4020.3 | **not** an invariant - smoothing passes through zero |
+| Occupied bandwidth | wider | narrower | the defining GFSK property |
+| Envelope | constant | constant | |
+
+An initial test asserted mean absolute frequency as the invariant. That was **wrong** -
+Gaussian shaping preserves the *area* of the frequency pulse, not the mean of its
+magnitude. The test was corrected to assert unit pulse area, preserved accumulated phase
+and un-exceeded peak deviation, which is the actual physics.
+
+### Ground truth
+
+`signal.gaussian_bt` added. `modulation.pulse_shape` already existed and now records
+`"gaussian"` for GFSK. `radiofry_label` resolves to `GFSK` and `PAM4` directly from the
+registry, so the label vocabulary needs no special-casing. `fsk_deviation_hz` and
+`fsk_modulation_index` populate for GFSK exactly as for CPFSK.
+
+### Training pipeline - 8 classes, dataset build validated (NOT trained)
+
+`build_capture_specs` iterates `MODULATIONS`, so PAM4 and GFSK were picked up with no
+change to the training module itself. Validated build (4 replicates, split seed
+20 260 908, V1 seed-collision check enabled):
+
+```
+labels (8): ['8PSK', 'BPSK', 'CPFSK', 'GFSK', 'PAM4', 'QAM16', 'QAM64', 'QPSK']
+captures  : train=100  validation=50  test=50
+per class : CPFSK/GFSK 20-10-10, all others 10-5-5
+frames    : (1024, 4, 128) float32, all finite
+```
+
+Labels match the production vocabulary exactly (8 of RadioFry's 11). A full 24-replicate
+build would be **1200 captures / ~76 800 frames**, up from 840 / 53 760 at 6 classes.
+
+**Class-balance note for the eventual training run:** CPFSK and GFSK each receive twice
+the captures of the other six, because both are FSK and are swept over h = 0.5 and
+h = 1.0. This is deliberate coverage, not an accident, but it should be a conscious
+decision before training.
+
+### Tests
+
+New `tests/test_synthetic_pam4_gfsk.py`, **30 tests**: registry/label coverage, PAM4
+constellation geometry and mapping, PAM4 bit-exact oracle recovery, PAM4 carrying no FSK
+parameters, GFSK defaults and configurable BT, constant modulus, unit pulse area,
+accumulated-phase preservation, frequency smoothing, narrower occupied bandwidth,
+determinism, peak-deviation bound, rejection of gaussian shaping on non-FSK and of
+unknown pulse shapes, the existing six modulations keeping rectangular pulses, and - the
+strongest guard - **six frozen V1 captures re-derived from their own ground truth and
+matched against the on-disk files sample by sample**.
+
+`tests/test_v2_training_pipeline.py` updated for 8 classes (+3 tests: both FSK
+modulations swept over their indices, PAM4 label coverage, FSK-aware index assertion).
+
+Full suite: **390 passed** (up from 358), same single pre-existing `reedsolo` failure.
+
+### Files changed
+
+```
+src/radiofry/synthetic_gen/v1/config.py       modified (179 -> 204) registry, pulse shape, gaussian_bt
+src/radiofry/synthetic_gen/v1/modulation.py   modified (72 -> 97)  pam branch, gaussian_frequency_pulse
+src/radiofry/synthetic_gen/v1/generator.py    modified (386 -> 387) gaussian_bt in ground truth
+src/radiofry/synthetic_gen/v1/__init__.py     modified (47 -> 54)  export gaussian_frequency_pulse
+tests/test_synthetic_pam4_gfsk.py             added, 30 tests
+tests/test_v2_training_pipeline.py            modified for 8 classes
+```
+
+### Not done, by instruction
+
+No PAM4 demodulator or dispatch route (PAM4 is generatable and classifiable but still
+**not demodulatable** - `dispatch` returns "No demodulator is registered for PAM4").
+No FSK demodulator or timing change. No analog classes. No training run. V1 untouched.
+
+### Next step
+
+Decide the class-balance question above, then launch the 8-class training run and
+benchmark it against both the 6-class checkpoint and the frozen V1 set.
+
+---
+
+## Entry 017 - 2026-09-08 - V2.0: train and evaluate the 8-class modulation CNN
+
+Training and evaluation only. **No production code was changed** in this entry - the
+suite is unchanged at 390 passed. The frozen V1 dataset is byte-identical
+(`d6d3f918687d0700a43e46211c3f04b9`, 40 captures). `dispatch.py`, `fsk_demod.py`,
+fusion, symbol-rate estimation, preprocessing and the V1 generator were not touched.
+
+### Pre-training verification (all five checks passed)
+
+1. **Labels**: exactly `['8PSK','BPSK','CPFSK','GFSK','PAM4','QAM16','QAM64','QPSK']`.
+2. **Class counts**: 1200 captures / 76 800 frames. CPFSK and GFSK carry 240 captures
+   each because both sweep h = 0.5 and h = 1.0; the other six carry 120. **The h = 1.0
+   hard cases were retained, not dropped.**
+3. **Leakage**: capture-id and seed overlap is zero across all three split pairs; every
+   capture appears in exactly one split; the generalisation seed range is disjoint; the
+   V1 seed-collision check passed.
+4. **Ground truth**: BFSK -> `CPFSK` (rect, h=0.5), GFSK -> `GFSK` (gaussian, BT=0.3,
+   h=0.5), PAM4 -> `PAM4` (pam family, 2 bits/symbol), 16QAM -> `QAM16`.
+5. **Composition**: 1024 symbols @ 8 sps / 200 kHz, SNR sweep 20/15/10/5/0 dB with 240
+   captures at each SNR.
+
+### Dataset and split
+
+| Property | Value |
+|---|---|
+| Captures / frames | 1200 / 76 800 |
+| Split (capture level) | train 700 / validation 250 / test 250 |
+| Frames | train 44 800 / validation 16 000 / test 16 000 |
+| Stratification | (label, SNR, FSK modulation index) |
+| Split seed / torch seed | 20 260 908 / 7 |
+| Input | 4-channel iqap, 128 samples, inference-identical preprocessing |
+
+### Training configuration - unchanged from Entry 015
+
+Adam lr 1e-3, ReduceLROnPlateau (patience 2, factor 0.5), CrossEntropyLoss, batch 256,
+max 60 epochs, early-stopping patience 6, validation-loss selection, CPU.
+
+**Best epoch 25**, validation loss 0.09626, early stopped at epoch 31, 584 s.
+
+### Held-out test results (16 000 frames / 250 captures)
+
+| Metric | 6-class (Entry 015) | **8-class** |
+|---|---|---|
+| Top-1 | 0.9382 | **0.9583** |
+| Top-3 | 0.9992 | **0.9995** |
+| Validation top-1 | 0.9443 | 0.9561 |
+| Independent generalisation top-1 | 0.9406 | **0.9545** |
+
+Independent generalisation used 300 captures / 19 200 frames from the disjoint seed base
+9 000 000, never used for training or model selection.
+
+Per-class test accuracy (6-class value in brackets where comparable):
+
+| Class | Accuracy | vs Entry 015 |
+|---|---|---|
+| BPSK | 0.9975 | 1.0000 (−0.0025) |
+| PAM4 | **0.9950** | new |
+| GFSK | **0.9881** | new |
+| CPFSK | 0.9816 | 0.9991 (**−0.0175**) |
+| QPSK | 0.9775 | 0.9788 (−0.0013) |
+| 8PSK | 0.9569 | 0.9569 (unchanged) |
+| QAM16 | 0.9119 | 0.9313 (−0.0194) |
+| **QAM64** | **0.8050** | 0.7025 (**+0.1025**) |
+
+Confusion matrix (truth rows):
+
+| | 8PSK | BPSK | CPFSK | GFSK | PAM4 | QAM16 | QAM64 | QPSK |
+|---|---|---|---|---|---|---|---|---|
+| 8PSK | 1531 | 0 | 1 | 5 | 0 | 34 | 10 | 19 |
+| BPSK | 0 | 1596 | 0 | 0 | 4 | 0 | 0 | 0 |
+| CPFSK | 1 | 0 | 3141 | **58** | 0 | 0 | 0 | 0 |
+| GFSK | 1 | 0 | **37** | 3162 | 0 | 0 | 0 | 0 |
+| PAM4 | 0 | 7 | 0 | 0 | 1592 | 1 | 0 | 0 |
+| QAM16 | 35 | 0 | 0 | 0 | 0 | 1459 | **106** | 0 |
+| QAM64 | 24 | 0 | 0 | 2 | 1 | **285** | 1288 | 0 |
+| QPSK | 29 | 0 | 0 | 0 | 1 | 2 | 4 | 1564 |
+
+Per-SNR: 20 dB 0.9997, 15 dB 0.9981, 10 dB 0.9947, 5 dB 0.9575, **0 dB 0.8416**.
+Confidence: mean 0.9512, median 0.9999, p10 0.8030, fraction below 0.4 = 0.0034.
+
+### Required class-specific analysis
+
+**CPFSK vs GFSK - well separated but not free.** CPFSK->GFSK 1.81%, GFSK->CPFSK 1.16%.
+This is the only new confusion pair of consequence and it explains CPFSK's drop from
+0.9991 to 0.9816: the model now has a genuinely similar neighbour. Both remain above
+0.98, so Gaussian shaping is a learnable discriminator.
+
+**PAM4 - highly learnable.** 0.9950, with only 8 errors in 1600 frames (7 to BPSK, 1 to
+QAM16). BPSK confusion is expected - both are real-axis constellations.
+
+**QAM16 vs QAM64 - still the dominant error mode, but improved.** QAM64->QAM16 17.81%
+(285 frames) and QAM16->QAM64 6.63%. QAM64 nonetheless **improved** from 0.7025 to
+0.8050; adding two classes did not degrade it.
+
+**Low-SNR behaviour by class (the collapse is concentrated, not general):**
+
+| Class | 20 dB | 15 dB | 10 dB | 5 dB | 0 dB |
+|---|---|---|---|---|---|
+| BPSK | 1.000 | 1.000 | 1.000 | 1.000 | 0.988 |
+| PAM4 | 1.000 | 1.000 | 1.000 | 1.000 | 0.975 |
+| GFSK | 1.000 | 1.000 | 0.998 | 0.988 | 0.955 |
+| CPFSK | 1.000 | 1.000 | 1.000 | 0.994 | 0.914 |
+| QPSK | 1.000 | 1.000 | 1.000 | 0.997 | 0.891 |
+| 8PSK | 1.000 | 1.000 | 1.000 | 0.981 | 0.803 |
+| QAM16 | 1.000 | 0.991 | 0.991 | 0.891 | 0.688 |
+| **QAM64** | 0.997 | 0.991 | 0.959 | 0.744 | **0.334** |
+
+**QAM64 collapses at 0 dB to 0.334** and is already degraded at 5 dB (0.744). Every other
+class stays above 0.80 at 0 dB. This is the single clearest weakness and is reported as
+measured, not smoothed over.
+
+### Frozen V1 regression - no change whatsoever
+
+`reports/v2_newmodel/` (6-class) vs `reports/v2_8class/` (8-class), identical captures
+and settings:
+
+| Metric | OLD 11-class | 6-class | **8-class** |
+|---|---|---|---|
+| CNN top-1 | 0.7714 | 0.9714 | **0.9714** |
+| CNN top-3 | 0.8571 | 1.0000 | **1.0000** |
+| Fusion accuracy | 0.6857 | 0.9714 | **0.9714** |
+| Rejection rate | 0.1714 | 0.0000 | **0.0000** |
+| Demodulation reached | 0.8286 | 1.0000 | **1.0000** |
+| BER scored | 58 | 70 | **70** |
+| Median strict BER | 0.01383 | 0.07959 | **0.07959** |
+| Mean CNN confidence | 0.6932 | 0.9309 | 0.9273 |
+
+Per-modulation CNN top-1 is identical between the two V2 models: BPSK/QPSK/8PSK/BFSK/
+16QAM all 1.00, 64QAM 0.80.
+
+**Per-capture: 0 improved, 0 worse, 35 unchanged, 0 newly demodulated, 0 lost.** Adding
+PAM4 and GFSK cost the original six classes **nothing** on the frozen benchmark.
+
+**Caveat:** the frozen V1 set contains no PAM4 or GFSK captures, so this regression test
+exercises only the original six classes. The new classes are evidenced solely by the
+synthetic held-out and generalisation sets.
+
+### Did any of the original six become worse?
+
+On the **frozen V1 benchmark, no** - every metric and every capture is identical.
+On the **synthetic test set**, three of the six moved slightly:
+CPFSK −0.0175 (the GFSK neighbour), QAM16 −0.0194, BPSK −0.0025, QPSK −0.0013,
+8PSK unchanged, and QAM64 **+0.1025**. Net overall accuracy rose 0.9382 -> 0.9583, so the
+small per-class costs are outweighed, but the CPFSK and QAM16 dips are real and caused by
+the added classes.
+
+### Limitations
+
+- QAM64 at 0 dB is 0.334 and at 5 dB is 0.744; 285 of 1600 QAM64 test frames are called
+  QAM16. This is the dominant residual error.
+- CPFSK lost 1.75 points to the new GFSK neighbour.
+- 3 of RadioFry's 11 production classes are still missing (AM-DSB, AM-SSB, WBFM); the
+  generator cannot produce them because they carry no bits.
+- **PAM4 is classifiable but still not demodulatable** - `dispatch` has no PAM4 route, so
+  a PAM4 label would be forwarded by fusion and then fail at `demodulate_capture`.
+- Everything is one synthetic generator: rectangular/Gaussian pulses, AWGN only, one
+  symbol rate, one sps. Real-capture performance remains unmeasured.
+- CPFSK/GFSK carry twice the captures of the other six classes (the h sweep). This was
+  retained deliberately; no loss weighting was applied.
+- Fusion rejection is 0.0000 on V1 with both V2 models, so the uncalibrated 0.4 threshold
+  currently rejects nothing - carry-forward item 4 is now more pressing, not less.
+
+### Recommendation
+
+**B - the 8-class model is a strict improvement on the 6-class one and should become the
+V2.0 working baseline, but it is still not a drop-in replacement for the shipped
+checkpoint.**
+
+It beats the 6-class model on held-out test (0.9583 vs 0.9382), on independent
+generalisation (0.9545 vs 0.9406) and on QAM64 (0.8050 vs 0.7025), while being exactly
+equal on the frozen V1 benchmark with zero regressions. The blockers to promotion are
+unchanged and concrete: three missing production classes, QAM64's low-SNR collapse, and
+PAM4 having no demodulation route.
+
+### Artifacts
+
+```
+models_saved/modulation_cnn_v2_8class.pt            ~193 KB checkpoint
+models_saved/modulation_cnn_v2_8class_metrics.json  metrics required by the loader
+reports/v2_8class/                                  frozen V1 evaluation with the 8-class model
+```
+
+---
+
+## Entry 018 - 2026-09-08 - Analog ground-truth design investigation (AM-DSB / AM-SSB / WBFM)
+
+**Design investigation only. Nothing was implemented.** No generator, harness,
+demodulator, dispatch, fusion, CNN or dataset file was modified; the suite is unchanged
+at 390 passed and the frozen V1 dataset is untouched.
+
+### EXISTING CODE FACTS (read from source)
+
+- `decoding/demodulators/analog_demod.py` provides three functions:
+  `demodulate_am` (envelope minus mean), `demodulate_ssb` (product detector taking
+  `sample_rate` and `carrier_frequency`), `demodulate_fm` (`diff(unwrap(angle))`).
+- `dispatch.py` routes `AM-DSB` -> `demodulate_am`, `AM-SSB` -> `demodulate_ssb`,
+  `WBFM` -> `demodulate_fm`.
+- `fusion/confidence_fusion.py` already maps all three labels to `analog-like`, and
+  `dsp/cyclostationary.py` can already emit `analog-like`. **No label or fusion work is
+  needed.**
+- The V1 ground-truth contract is bit-centric: `generate_source_bits` draws
+  `num_symbols * bits_per_symbol` bits, and the record carries a mandatory `bits` block
+  plus `bits_per_symbol`, `num_symbols`, `symbol_rate_hz`, `samples_per_symbol`.
+- `writers.py` operates on arbitrary complex baseband and needs **no change** for analog.
+
+### MEASURED FACTS (probed, read-only)
+
+Four concrete blockers were verified rather than assumed:
+
+1. **The harness would crash.** `evaluation/metrics.py:expected_family_for("analog")`
+   raises `KeyError: 'analog'`. It is called unconditionally in `evaluate_capture`
+   *before* the ingestion try/except, so the first analog capture aborts the sweep.
+2. **Ground truth would be poisoned.** `generator.py` computes
+   `eb_n0_db = es_n0_db - 10*log10(bits_per_symbol)`; with `bits_per_symbol = 0` this
+   evaluates to **-inf**.
+3. **`dispatch` synthesises fake bits for analog**:
+   `DemodulationResult(analog, np.asarray(analog > np.median(analog), dtype=np.uint8), ...)`.
+   An analog capture therefore **would** produce a numeric BER, and that number would be
+   meaningless - a median threshold of an audio waveform.
+4. **`dispatch` decimates analog by the estimated symbol rate.** `symbol_samples =
+   signal.iq[timing_offset::samples_per_symbol]` runs before the analog branch, and
+   AM-SSB compensates with `sample_rate / samples_per_symbol`. Analog signals have no
+   symbol rate, so the analog path currently depends on an estimate with no physical
+   meaning for these classes.
+
+Also measured: `score_bits(empty_truth, recovered, available=True)` returns
+`status="ok"` with `strict=None` - a silent hole - whereas
+`score_bits(..., available=False, reason=...)` correctly returns `status="unavailable"`.
+The mechanism to mark BER unavailable already exists and should be used explicitly.
+
+### PROPOSED DESIGN - message signal
+
+Use a **deterministic multi-tone message**, not recorded audio. Rationale: no external
+assets, exactly reproducible from a seed, and it yields crisp analytic oracles (known
+tone frequencies produce known spectral structure). This matches V1's known-ground-truth
+discipline.
+
+Message = sum of K tones with seeded frequencies, amplitudes and phases, peak-normalised
+to 1.0, recorded in ground truth as an explicit tone list plus an `.npy` of the sampled
+message and its SHA-256.
+
+### PROPOSED DESIGN - per-class generation parameters
+
+| Class | Baseband model | Required parameters |
+|---|---|---|
+| AM-DSB | `x(t) = 1 + m*s(t)` (real, carrier present so the envelope detector works) | modulation depth `m` (default 0.5) |
+| AM-SSB | `x(t) = s(t) + j*hilbert(s(t))` for USB, conjugate for LSB | `sideband` ("upper"/"lower") |
+| WBFM | `x(t) = exp(j*2*pi*deviation*cumsum(s)/fs)` | `frequency_deviation_hz`, derived `modulation_index = deviation / max_tone_hz` |
+
+All three share: `sample_rate_hz`, `duration_sec` / `num_samples`, message tone list,
+SNR. None of them has a symbol rate, samples-per-symbol, constellation or bit mapping.
+
+### PROPOSED DESIGN - one shared analog schema
+
+All three classes fit **one** schema; no per-class schema is needed.
+
+Reused unchanged: `schema`, `capture_id`, `generated_utc`, `generator`,
+`modulation.{name, family, radiofry_label}`, `signal.{sample_rate_hz, num_samples,
+duration_sec, center_frequency_hz}`, the whole `noise` block except the two derived
+energy ratios, `impairments`, `seeds`, `files`, `known_hard`.
+
+Must become **explicitly null** for analog (not absent, not zero):
+`modulation.{order, bits_per_symbol, bit_mapping, constellation_normalization}`,
+`signal.{symbol_rate_hz, samples_per_symbol, fsk_deviation_hz, fsk_modulation_index,
+gaussian_bt}`, `noise.{es_n0_db, eb_n0_db}`, and the entire `bits` block.
+
+New, analog-only:
+
+```
+"message": {"type": "multitone", "tones": [{"frequency_hz", "amplitude", "phase_rad"}],
+            "peak_normalised": true, "message_file": "<id>.message.npy",
+            "message_sha256": "..."}
+"analog":  {"scheme": "am_dsb" | "am_ssb" | "wbfm",
+            "modulation_depth": ..., "sideband": ..., "frequency_deviation_hz": ...,
+            "modulation_index": ...}
+```
+
+A `capture_kind: "digital" | "analog"` discriminator at the top level is proposed so
+consumers can branch without inspecting families.
+
+### PROPOSED DESIGN - evaluation metrics
+
+- **BER: explicitly unavailable.** Add an `UNAVAILABLE_METRICS` entry
+  (`bit_error_rate_analog`) and pass `available=False,
+  reason="analog_no_transmitted_bits"` to `score_bits`. The harness must **not** score
+  the median-threshold bits `dispatch` synthesises (measured fact 3); doing so would
+  publish a meaningless number.
+- **Positive metric: message-recovery correlation.** Correlate the demodulated analog
+  output against the known message from ground truth. This is the analog analogue of
+  BER and needs no new architecture - it is one extra record field.
+  **Caveat to record with it:** `dispatch` decimates by the estimated symbol rate
+  (measured fact 4), so the correlation is confounded by a quantity that has no meaning
+  for analog. It must be reported as a diagnostic with that caveat, not as a clean score.
+
+### PROPOSED DESIGN - generator-side oracles
+
+Each class gets a deterministic oracle that proves the waveform is the intended
+modulation, **independent of RadioFry's demodulators**:
+
+| Class | Oracle |
+|---|---|
+| AM-DSB | spectrum shows a carrier at 0 Hz and symmetric sidebands at +/- each tone; `abs(x) - mean` correlates > 0.99 with the known message |
+| AM-SSB | sideband suppression: energy at the unwanted sideband is >= 30 dB below the wanted one; real part of the product-detected signal correlates > 0.99 with the message |
+| WBFM | `diff(unwrap(angle(x))) * fs / 2pi` correlates > 0.99 with `deviation * s(t)`; occupied bandwidth matches Carson's rule `2*(deviation + f_max)` |
+
+### Do the analog classes break the existing digital contract?
+
+**No, provided the bit fields become explicitly nullable rather than being removed or
+zero-filled.** Digital captures keep every field they have today, unchanged. The four
+measured blockers are all small and localised, and three of them are latent bugs that
+would bite the moment any analog capture appeared - they are worth fixing regardless.
+
+### Minimum implementation files (NOT modified)
+
+```
+src/radiofry/synthetic_gen/v1/config.py        analog MODULATIONS entries, analog family,
+                                               message/analog parameters, nullable digital fields
+src/radiofry/synthetic_gen/v1/modulation.py    multitone message + three analog modulators
+src/radiofry/synthetic_gen/v1/generator.py     schema: null bits block, analog/message blocks,
+                                               guard the eb_n0_db computation
+src/radiofry/synthetic_gen/v1/__init__.py      exports
+src/radiofry/evaluation/metrics.py             expected_family_for: "analog" -> "analog-like"
+src/radiofry/evaluation/harness.py             BER unavailable for analog, message-correlation
+                                               field, new UNAVAILABLE_METRICS entry
+src/radiofry/evaluation/symbol_rate_experiment.py  pin its modulation default to digital only
+src/radiofry/training/train_v2_synthetic.py    11-class coverage, analog captures have no symbols
+tests/                                          oracle + schema + harness-compatibility tests
+```
+
+### Risks / compatibility concerns
+
+1. **`tuple(MODULATIONS)` is the default in three places** (`generator.DatasetSpec`,
+   `training.build_capture_specs`, `evaluation.symbol_rate_experiment.run_experiment`).
+   Adding analog entries silently widens all three. The symbol-rate experiment would
+   break outright, since it assumes digital signals - its default must be pinned first.
+2. **End-to-end analog demodulation will look bad for reasons unrelated to the
+   generator** (measured fact 4: symbol-rate decimation). This must be expected and
+   documented up front, not "fixed" by touching `dispatch`.
+3. `num_symbols` is load-bearing across the generator, harness and training builder.
+   Analog needs `num_samples` / `duration_sec` as the primary length parameter.
+4. The frozen V1 dataset must not be regenerated. It is on disk with 40 captures and
+   stays that way.
+5. Class balance: adding three analog classes to an 11-class training run changes the
+   mix again; CPFSK/GFSK already carry 2x.
+
+### Recommended implementation sequence
+
+1. **Fix the two latent crash/poison points first** - `expected_family_for` and the
+   `eb_n0_db` guard. Tiny, independently testable, and no behaviour change for digital.
+2. Pin `symbol_rate_experiment`'s modulation default to the digital set.
+3. Add the multi-tone message generator with its own tests.
+4. Add AM-DSB + oracle. Then AM-SSB + sideband-suppression oracle. Then WBFM + Carson /
+   discriminator oracle. One class per step, each validated before the next.
+5. Extend the ground-truth schema (nullable digital fields, `analog`/`message` blocks,
+   `capture_kind`).
+6. Harness: BER explicitly unavailable, message-correlation diagnostic with its caveat.
+7. Only then extend training to 11 classes and re-benchmark against frozen V1.
+
+Steps 1-2 are safe to do immediately and independently of the analog work.
+
+### Open question for the team
+
+Should analog captures be added to the **frozen V1 benchmark** (they cannot - V1 is
+frozen), or should a separate **V2 analog benchmark set** be created? The current
+recommendation is a separate V2 set, leaving V1 as the untouched digital regression
+benchmark.
+
+---
+
+## Entry 019 - 2026-09-09 - Analog prerequisite safety fixes (no analog generation)
+
+The two latent defects measured in Entry 018, plus a guard on the symbol-rate
+experiment. **No analog class was implemented.** The registry is still the eight digital
+modulations, and the frozen V1 dataset is byte-identical
+(`d6d3f918687d0700a43e46211c3f04b9`, 40 captures). No demodulator, `dispatch.py`, fusion,
+CNN, PAM4/GFSK or V1 dataset change.
+
+### Task 1 - analog family lookup (FIXED)
+
+`evaluation/metrics.py` (140 -> 149 lines). `_FAMILY_BY_V1_FAMILY` gained two entries:
+
+```
+"pam":    "QAM-like"       <- matches fusion's own PAM4 mapping
+"analog": "analog-like"    <- matches fusion's AM-DSB/AM-SSB/WBFM mapping
+```
+
+The three existing digital mappings are untouched, and an unknown family still raises
+`KeyError`.
+
+**Correction to Entry 018:** the crash was reported there as analog-only. It is not.
+`expected_family_for("pam")` raised `KeyError` as well, and **PAM4 already exists in the
+registry** (Entry 016), so the crash was live today for any V2 dataset containing PAM4 -
+not merely hypothetical. Both families are now covered.
+
+No analog BER is invented anywhere; this change only makes the family label resolvable.
+
+### Task 2 - Eb/N0 guard (FIXED)
+
+`synthetic_gen/v1/generator.py` (387 -> 400 lines). The inline expression
+`es_n0_db - 10*np.log10(spec.bits_per_symbol)` is replaced by a small helper:
+
+```python
+def _eb_n0_db(es_n0_db, bits_per_symbol):
+    if es_n0_db is None or bits_per_symbol < 1:
+        return None
+    return float(es_n0_db - 10 * np.log10(bits_per_symbol))
+```
+
+Unavailable is represented explicitly as `None`, never as zero and never as `-inf`.
+
+**Digital behaviour verified unchanged:** the frozen V1 QPSK capture records
+`eb_n0_db = 26.0206` on disk, and recomputing it through the guard returns
+**26.0206** - identical. Every current modulation (including PAM4 and GFSK) still yields
+a finite value.
+
+### Task 3 - symbol-rate experiment pin (NO CHANGE NEEDED)
+
+**Entry 018's risk #1 was partly wrong and is corrected here.**
+`evaluation/symbol_rate_experiment.py` does **not** import `MODULATIONS` from the
+registry. It defines its own list at line 39:
+
+```python
+MODULATIONS = ["BPSK", "QPSK", "8PSK", "BFSK", "16QAM", "64QAM"]
+```
+
+which shadows nothing and is already digital-only - verified at runtime: it contains
+neither PAM4 nor GFSK even though both are in the registry today. It therefore **cannot**
+silently widen when analog classes are added, and no code change was made.
+
+Instead, five guard tests now lock that behaviour: the list equals the six digital names,
+excludes PAM4/GFSK, is a strict subset of the registry (so it is provably not
+`tuple(MODULATIONS)`), `run_experiment`'s default matches the pinned list, and requesting
+an analog modulation raises.
+
+Existing digital experiment results remain reproducible - nothing in the experiment
+changed.
+
+### Tests
+
+New `tests/test_analog_safety_guards.py`, **25 tests**: digital family mappings
+unchanged, analog and pam resolve, every registry family resolves, the resolved
+vocabulary is a subset of fusion's, unknown families still raise; Eb/N0 normal for
+digital, `None` at zero bits, `None` when Es/N0 is `None`, never infinite, finite for all
+eight current modulations; and the five symbol-rate pin guards.
+
+**One pre-existing test was updated, deliberately.**
+`tests/test_v1_harness_metrics.py::test_expected_family_rejects_an_unknown_family` used
+`"analog"` as its example of an unknown family - exactly the behaviour Task 1 was asked
+to change. It now uses a genuinely unknown value. This is a behaviour change, recorded
+rather than hidden.
+
+Full suite: **415 passed** (up from 390), same single pre-existing `reedsolo` failure.
+
+### Confirmations
+
+1. Focused tests for all three tasks: 25 passed.
+2. Full suite: 415 passed, 1 known failure.
+3. Digital behaviour unchanged: frozen V1 `eb_n0_db` identical; family mappings identical.
+4. No analog generation: registry is
+   `['16QAM','64QAM','8PSK','BFSK','BPSK','GFSK','PAM4','QPSK']`; none of AM-DSB, AM-SSB,
+   WBFM is present.
+5. `symbol_rate_experiment.MODULATIONS == ['BPSK','QPSK','8PSK','BFSK','16QAM','64QAM']`.
+6. Frozen V1 SHA-256 unchanged.
+
+### Files changed
+
+```
+src/radiofry/evaluation/metrics.py          modified (140 -> 149) pam + analog families
+src/radiofry/synthetic_gen/v1/generator.py  modified (387 -> 400) _eb_n0_db guard
+tests/test_analog_safety_guards.py          added, 25 tests
+tests/test_v1_harness_metrics.py            modified (one test, deliberate)
+src/radiofry/evaluation/symbol_rate_experiment.py   NOT changed - already pinned
+```
+
+The infrastructure is now safe for analog captures. Analog generation itself remains
+unimplemented and is the next task when approved.

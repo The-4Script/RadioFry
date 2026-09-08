@@ -303,3 +303,156 @@ Best epoch 18 (validation loss 0.12028), early stopped at 24, 450 s on CPU.
 - The new checkpoint has only the 6 V1 classes; the old one had 11 RML classes. Not a
   drop-in replacement without a decision on the missing five.
 - Nothing in fusion/dispatch/DSP was touched to flatter the result.
+
+---
+
+## Run 009
+
+- **Date:** 2026-09-08
+- **Timestamp:** 23:27:31 IST
+- **Task:** Add PAM4 + GFSK to the V2 synthetic generator, 6 -> 8 classes (BANK.md Entry 016).
+- **Result:** PASS - generator support added and validated; no training run launched.
+
+### Tests run
+
+- `tests/test_synthetic_pam4_gfsk.py` (new) - 30 passed
+- `tests/test_v2_training_pipeline.py` (updated for 8 classes) - 16 passed
+- Full suite - **390 passed, 1 failed** (pre-existing `reedsolo` gap)
+
+### Production change
+
+V1 generator package only: `config.py`, `modulation.py`, `generator.py`, `__init__.py`.
+PAM4 as a new `pam` constellation family; GFSK as an FSK with a unit-area Gaussian
+frequency pulse (BT 0.3 default).
+
+### Key results
+
+- Frozen V1 aggregate .iq SHA-256 **unchanged** (`d6d3f918687d0700a43e46211c3f04b9`,
+  40 captures); six V1 captures additionally re-derived and matched sample by sample.
+- PAM4: noiseless capture recovers the **exact** source bits via an independent oracle.
+- GFSK: unit pulse area (1.000000), accumulated phase preserved within 1.5%, peak
+  deviation never exceeded (6250 Hz), narrower occupied bandwidth than CPFSK.
+- 8-class dataset builds correctly: labels match production vocabulary, capture-level
+  split intact, frames (N, 4, 128) float32 all finite, V1 seed-collision check passes.
+
+### Important observations
+
+- One of my own tests initially asserted the wrong GFSK invariant (mean absolute
+  frequency). Gaussian shaping preserves pulse *area*, not that mean; the test was
+  corrected to the real physics rather than the measurement being adjusted.
+- CPFSK and GFSK will each get 2x the captures of the other six classes because both are
+  swept over h=0.5 and h=1.0. Flagged as a conscious decision needed before training.
+- PAM4 remains classifiable but **not demodulatable** - no dispatch route was added.
+
+---
+
+## Run 010
+
+- **Date:** 2026-09-08
+- **Timestamp:** 23:47:30 IST
+- **Task:** Train and evaluate the 8-class V2.0 modulation CNN (BANK.md Entry 017).
+- **Result:** PASS - 8-class model trained; strict improvement, zero V1 regression.
+
+### Tests run
+
+Full suite - **390 passed, 1 failed** (pre-existing `reedsolo` gap). No production code
+changed in this run, so the count is unchanged from Run 009.
+
+### Training
+
+1200 captures / 76 800 frames, capture-level split 700/250/250, Entry 015 configuration
+unchanged (Adam 1e-3, batch 256, patience 6, split seed 20 260 908, torch seed 7).
+Best epoch 25, validation loss 0.09626, early stopped at 31, 584 s on CPU.
+
+### Key results
+
+| Metric | 6-class | 8-class |
+|---|---|---|
+| Held-out test top-1 | 0.9382 | **0.9583** |
+| Independent generalisation | 0.9406 | **0.9545** |
+| QAM64 per-class | 0.7025 | **0.8050** |
+| Frozen V1 CNN top-1 | 0.9714 | 0.9714 (identical) |
+
+Frozen V1 per-capture: **0 improved, 0 worse, 35 unchanged** - adding PAM4 and GFSK cost
+the original six classes nothing.
+
+### Important observations
+
+- New classes learn well: PAM4 0.9950, GFSK 0.9881. CPFSK/GFSK confusion is only
+  1.81%/1.16%.
+- **QAM64 collapses at low SNR: 0.334 at 0 dB, 0.744 at 5 dB**; 285/1600 test frames go
+  to QAM16. Dominant residual error, reported as measured.
+- CPFSK dipped 0.9991 -> 0.9816 and QAM16 0.9313 -> 0.9119 because of the added
+  neighbours; QAM64 improved by 10 points. Net accuracy rose.
+- The frozen V1 set has no PAM4/GFSK captures, so it only regression-tests the original
+  six; the new classes rest on the synthetic held-out and generalisation sets.
+- Fusion rejection is 0.0000 on V1 for both V2 models - the uncalibrated 0.4 threshold
+  now rejects nothing.
+
+---
+
+## Run 011
+
+- **Date:** 2026-09-08
+- **Timestamp:** 23:58:00 IST
+- **Task:** Analog ground-truth design investigation for AM-DSB / AM-SSB / WBFM
+  (BANK.md Entry 018). Design only - nothing implemented.
+- **Result:** PASS - design produced; four concrete blockers measured.
+
+### Tests run
+
+None beyond read-only probes; no code changed. Last recorded suite result stands
+(Run 010: 390 passed, 1 pre-existing `reedsolo` failure).
+
+### Important observations
+
+- **Four blockers verified, not assumed:**
+  1. `expected_family_for("analog")` raises `KeyError` and would crash the harness on the
+     first analog capture.
+  2. `eb_n0_db` evaluates to **-inf** when `bits_per_symbol = 0`.
+  3. `dispatch` synthesises bits for analog (`analog > median(analog)`), so an analog
+     capture would publish a meaningless numeric BER.
+  4. `dispatch` decimates analog by the estimated symbol rate, a quantity with no
+     physical meaning for these classes.
+- Labels and fusion need **no** work: all three analog labels already map to
+  `analog-like` in `confidence_fusion.py`.
+- Proposed: deterministic multi-tone message (no audio assets), one shared analog schema
+  with a `scheme` discriminator, BER explicitly unavailable, and message-recovery
+  correlation as the positive metric with a documented decimation caveat.
+- Recommended first move is the two latent fixes (blockers 1 and 2), which are safe and
+  independent of the analog work.
+
+---
+
+## Run 012
+
+- **Date:** 2026-09-09
+- **Timestamp:** 00:05:11 IST
+- **Task:** Analog prerequisite safety fixes - family lookup, Eb/N0 guard, symbol-rate
+  experiment pin (BANK.md Entry 019). No analog generation.
+- **Result:** PASS - two fixes applied, one confirmed already safe.
+
+### Tests run
+
+- `tests/test_analog_safety_guards.py` (new) - 25 passed
+- Full suite - **415 passed, 1 failed** (pre-existing `reedsolo` gap)
+
+### Production changes
+
+- `evaluation/metrics.py` (140 -> 149): `_FAMILY_BY_V1_FAMILY` gains `pam -> QAM-like`
+  and `analog -> analog-like`, matching fusion's vocabulary.
+- `synthetic_gen/v1/generator.py` (387 -> 400): new `_eb_n0_db` helper returning `None`
+  for bit-less captures instead of `-inf`.
+- `evaluation/symbol_rate_experiment.py`: **no change** - already digital-pinned.
+
+### Important observations
+
+- **Entry 018 correction 1:** the family-lookup crash was not analog-only.
+  `expected_family_for("pam")` also raised `KeyError`, and PAM4 is already in the
+  registry, so the defect was live today rather than hypothetical.
+- **Entry 018 correction 2:** `symbol_rate_experiment` never imported the registry
+  `MODULATIONS`; it has its own digital list at line 39 and could not have widened.
+  Locked with five guard tests instead of a code change.
+- One pre-existing test (`test_expected_family_rejects_an_unknown_family`) used
+  `"analog"` as its unknown-family example and was updated deliberately.
+- Frozen V1 unchanged; no analog classes exist in the registry.

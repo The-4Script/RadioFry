@@ -20,6 +20,10 @@ def constellation_for(modulation: str) -> np.ndarray:
     spec = MODULATIONS[modulation]
     if spec.family == "psk":
         return np.exp(2j * np.pi * np.arange(spec.order) / spec.order)
+    if spec.family == "pam":
+        levels = np.arange(-(spec.order - 1), spec.order, 2, dtype=np.float64)
+        points = levels.astype(np.complex128)
+        return points / np.sqrt(np.mean(np.abs(points) ** 2))
     if spec.family == "qam":
         side = int(round(np.sqrt(spec.order)))
         levels = np.arange(-(side - 1), side, 2, dtype=np.float64)
@@ -62,11 +66,32 @@ def modulate(bits: np.ndarray, spec: SampleSpec) -> np.ndarray:
     return waveform.astype(np.complex64)
 
 
+def gaussian_frequency_pulse(bt: float, samples_per_symbol: int, span_symbols: int = 4) -> np.ndarray:
+    """Unit-area Gaussian frequency pulse used by GFSK.
+
+    Unit area keeps the accumulated phase per symbol - and therefore the modulation
+    index - identical to the unshaped CPFSK case.
+    """
+
+    sigma = np.sqrt(np.log(2.0)) / (2.0 * np.pi * bt)
+    half = span_symbols * samples_per_symbol // 2
+    positions = np.arange(-half, half + 1, dtype=np.float64) / samples_per_symbol
+    taps = np.exp(-(positions**2) / (2.0 * sigma**2))
+    return taps / np.sum(taps)
+
+
 def _modulate_cpfsk(indices: np.ndarray, spec: SampleSpec) -> np.ndarray:
-    """Continuous-phase FSK: index k maps to tone (2k - (M-1)) * deviation."""
+    """Continuous-phase FSK: index k maps to tone (2k - (M-1)) * deviation.
+
+    With `pulse_shape="gaussian"` the rectangular frequency pulse is smoothed first,
+    which is what distinguishes GFSK from CPFSK.
+    """
 
     order = spec.modulation_spec.order
     tones = (2 * indices - (order - 1)) * spec.fsk_deviation_hz
     per_sample = np.repeat(tones, spec.samples_per_symbol)
+    if spec.pulse_shape == "gaussian":
+        taps = gaussian_frequency_pulse(spec.gaussian_bt, spec.samples_per_symbol)
+        per_sample = np.convolve(per_sample, taps, mode="same")
     phase = 2 * np.pi * np.cumsum(per_sample) / spec.sample_rate_hz
     return np.exp(1j * phase)

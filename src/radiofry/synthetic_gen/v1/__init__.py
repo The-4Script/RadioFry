@@ -18,7 +18,13 @@ from .generator import (
     generate_sample,
     load_ground_truth,
 )
-from .modulation import bits_to_symbol_indices, constellation_for, generate_source_bits, modulate
+from .modulation import (
+    bits_to_symbol_indices,
+    constellation_for,
+    gaussian_frequency_pulse,
+    generate_source_bits,
+    modulate,
+)
 from .writers import WriteReport, write_iq_file, write_wav_file
 
 __all__ = [
@@ -37,6 +43,7 @@ __all__ = [
     "bits_to_symbol_indices",
     "capture_id_for",
     "constellation_for",
+    "gaussian_frequency_pulse",
     "generate_dataset",
     "generate_sample",
     "generate_source_bits",

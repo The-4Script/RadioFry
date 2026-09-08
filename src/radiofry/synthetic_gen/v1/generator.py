@@ -177,6 +177,7 @@ def generate_sample(
             "duration_sec": spec.duration_sec,
             "fsk_deviation_hz": spec.fsk_deviation_hz if spec.modulation_spec.family == "fsk" else None,
             "fsk_modulation_index": spec.fsk_modulation_index,
+            "gaussian_bt": spec.gaussian_bt,
             "center_frequency_hz": 0.0,
         },
         "noise": {
@@ -185,7 +186,7 @@ def generate_sample(
             "realized_snr_db": noise.realized_snr_db,
             "snr_definition": noise.snr_definition,
             "es_n0_db": es_n0_db,
-            "eb_n0_db": None if es_n0_db is None else es_n0_db - 10 * np.log10(spec.bits_per_symbol),
+            "eb_n0_db": _eb_n0_db(es_n0_db, spec.bits_per_symbol),
             "signal_power": noise.signal_power,
             "target_noise_power": noise.target_noise_power,
             "realized_noise_power": noise.realized_noise_power,
@@ -212,6 +213,19 @@ def generate_sample(
     }
     (output / f"{capture_id}.json").write_text(json.dumps(truth, indent=2), encoding="utf-8")
     return truth
+
+
+def _eb_n0_db(es_n0_db: float | None, bits_per_symbol: int) -> float | None:
+    """Energy per bit over noise density, or None when the capture carries no bits.
+
+    A bit-less (analog) capture has bits_per_symbol == 0, where the naive
+    10*log10(bits_per_symbol) term evaluates to -inf. Unavailable is represented
+    explicitly as None rather than as a fabricated or infinite number.
+    """
+
+    if es_n0_db is None or bits_per_symbol < 1:
+        return None
+    return float(es_n0_db - 10 * np.log10(bits_per_symbol))
 
 
 def _file_entry(report: Any) -> dict[str, Any]:

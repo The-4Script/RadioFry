@@ -30,6 +30,7 @@ class ModulationSpec:
     order: int
     bits_per_symbol: int
     radiofry_label: str
+    default_pulse_shape: str = "rect"
 
 
 MODULATIONS: dict[str, ModulationSpec] = {
@@ -39,7 +40,15 @@ MODULATIONS: dict[str, ModulationSpec] = {
     "BFSK": ModulationSpec("BFSK", "fsk", 2, 1, "CPFSK"),
     "16QAM": ModulationSpec("16QAM", "qam", 16, 4, "QAM16"),
     "64QAM": ModulationSpec("64QAM", "qam", 64, 6, "QAM64"),
+    "PAM4": ModulationSpec("PAM4", "pam", 4, 2, "PAM4"),
+    # GFSK is CPFSK with a Gaussian frequency pulse, so it shares the fsk family and
+    # differs only in its default pulse shape.
+    "GFSK": ModulationSpec("GFSK", "fsk", 2, 1, "GFSK", default_pulse_shape="gaussian"),
 }
+
+SUPPORTED_PULSE_SHAPES = ("rect", "gaussian")
+# Bandwidth-time product of the Gaussian frequency pulse. 0.3 is the common GFSK value.
+DEFAULT_GAUSSIAN_BT = 0.3
 
 DEFAULT_SNR_SWEEP_DB: tuple[float, ...] = (20.0, 15.0, 10.0, 5.0, 0.0)
 
@@ -79,7 +88,8 @@ class SampleSpec:
     bits_seed: int | None = None
     fsk_deviation_hz: float | None = None
     fsk_modulation_index: float | None = None
-    pulse_shape: str = "rect"
+    pulse_shape: str | None = None
+    gaussian_bt: float | None = None
     bit_mapping: str = "natural"
 
     def __post_init__(self) -> None:
@@ -87,14 +97,29 @@ class SampleSpec:
             raise ValueError(
                 f"unsupported modulation {self.modulation!r}; V1 supports {sorted(MODULATIONS)}"
             )
-        if self.pulse_shape != "rect":
-            raise ValueError("V1 only generates rectangular ('rect') pulses")
+        self._resolve_pulse_shape()
         if self.bit_mapping != "natural":
             raise ValueError("V1 only generates natural-binary ('natural') symbol mapping")
         if self.num_symbols < 1:
             raise ValueError("num_symbols must be positive")
         self._resolve_rates()
         self._resolve_fsk_deviation()
+
+    def _resolve_pulse_shape(self) -> None:
+        spec = MODULATIONS[self.modulation]
+        shape = spec.default_pulse_shape if self.pulse_shape is None else self.pulse_shape
+        if shape not in SUPPORTED_PULSE_SHAPES:
+            raise ValueError(f"pulse_shape must be one of {SUPPORTED_PULSE_SHAPES}")
+        if shape == "gaussian" and spec.family != "fsk":
+            raise ValueError("gaussian pulse shaping is only defined for frequency modulations")
+        object.__setattr__(self, "pulse_shape", shape)
+        if shape == "gaussian":
+            bt = DEFAULT_GAUSSIAN_BT if self.gaussian_bt is None else float(self.gaussian_bt)
+            if bt <= 0:
+                raise ValueError("gaussian_bt must be positive")
+            object.__setattr__(self, "gaussian_bt", bt)
+        elif self.gaussian_bt is not None:
+            raise ValueError("gaussian_bt is only meaningful with gaussian pulse shaping")
 
     def _resolve_fsk_deviation(self) -> None:
         index = self.fsk_modulation_index

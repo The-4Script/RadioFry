@@ -11,3 +11,6 @@ data/RML2016.10a_dict.pkl
 data/2018.01/
 .radiofry_upload.*
 reports/*.png
+/data/
+/reports/
+/models_saved/

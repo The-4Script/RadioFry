@@ -29,7 +29,8 @@ def _specs(replicates=2, seed_base=TRAIN_SEED_BASE):
 
 
 def test_labels_follow_the_existing_project_conventions() -> None:
-    assert LABELS == ["8PSK", "BPSK", "CPFSK", "QAM16", "QAM64", "QPSK"]
+    # 8 of RadioFry's 11 production labels; the analog three are not generatable yet.
+    assert LABELS == ["8PSK", "BPSK", "CPFSK", "GFSK", "PAM4", "QAM16", "QAM64", "QPSK"]
     assert {s.label for s in _specs()} == set(LABELS)
 
 
@@ -41,7 +42,20 @@ def test_bfsk_is_labelled_cpfsk_and_swept_over_both_indices() -> None:
 
 
 def test_non_fsk_specs_carry_no_modulation_index() -> None:
-    assert all(s.fsk_modulation_index is None for s in _specs() if s.modulation != "BFSK")
+    fsk = {name for name, spec in MODULATIONS.items() if spec.family == "fsk"}
+    assert all(s.fsk_modulation_index is None for s in _specs() if s.modulation not in fsk)
+
+
+def test_both_fsk_modulations_are_swept_over_their_indices() -> None:
+    for modulation in ("BFSK", "GFSK"):
+        indices = {s.fsk_modulation_index for s in _specs() if s.modulation == modulation}
+        assert indices == {0.5, 1.0}
+
+
+def test_pam4_specs_are_generated_with_the_production_label() -> None:
+    pam4 = [s for s in _specs() if s.modulation == "PAM4"]
+
+    assert pam4 and {s.label for s in pam4} == {"PAM4"}
 
 
 # --- deterministic, capture-level splitting -----------------------------------------

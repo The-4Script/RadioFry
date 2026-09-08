@@ -9,8 +9,17 @@ from typing import Iterable, Sequence
 
 import numpy as np
 
-# V1 modulation family -> the vocabulary dsp/cyclostationary.py emits.
-_FAMILY_BY_V1_FAMILY = {"psk": "PSK-like", "qam": "QAM-like", "fsk": "FSK-like"}
+# Generator modulation family -> the vocabulary dsp/cyclostationary.py emits and
+# fusion/confidence_fusion.py maps labels onto. PAM shares the QAM-like family, matching
+# fusion's own mapping for PAM4; analog is present so a bit-less capture cannot crash the
+# harness before its ingestion try/except. See BANK.md Entry 019.
+_FAMILY_BY_V1_FAMILY = {
+    "psk": "PSK-like",
+    "qam": "QAM-like",
+    "pam": "QAM-like",
+    "fsk": "FSK-like",
+    "analog": "analog-like",
+}
 
 DEFAULT_MAX_ALIGNMENT_OFFSET = 64
 
