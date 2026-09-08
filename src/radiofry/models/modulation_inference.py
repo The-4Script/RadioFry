@@ -18,20 +18,67 @@ class ModulationPrediction:
     message: str = ""
 
 
+# A single 128-sample window out of a long capture makes the decision unstable,
+# most visibly between QAM16 and QAM64. Averaging the softmax vectors of a few
+# evenly spaced windows recovers most of that; measurements in BANK.md Entry 010
+# show the whole gain is realised by four windows and nothing beyond it is
+# statistically distinguishable.
+DEFAULT_INFERENCE_WINDOWS = 4
+
+
 def _fixed_iq(signal: UnifiedSignalContainer, length: int) -> np.ndarray:
     if signal.iq.size == 0:
         raise ValueError("cannot classify an empty signal")
-    positions = np.linspace(0, signal.iq.size - 1, length)
-    source = np.arange(signal.iq.size)
-    real = np.interp(positions, source, signal.iq.real)
-    imag = np.interp(positions, source, signal.iq.imag)
+    samples = signal.iq
+    if samples.size > length:
+        # Window at the native rate. Interpolating across the whole capture decimates
+        # it (32768 -> 128 steps ~258 samples per point) with no anti-alias filter,
+        # which folds the signal to a different apparent frequency.
+        start = (samples.size - length) // 2
+        real = samples.real[start : start + length]
+        imag = samples.imag[start : start + length]
+    else:
+        positions = np.linspace(0, samples.size - 1, length)
+        source = np.arange(samples.size)
+        real = np.interp(positions, source, samples.real)
+        imag = np.interp(positions, source, samples.imag)
     values = np.stack([real, imag]).astype(np.float32)
     power = np.sqrt(np.mean(values**2))
     return values / power if power > 0 else values
 
 
-def predict_modulation(signal: UnifiedSignalContainer, checkpoint_path: str | Path, *, top_k: int = 3) -> ModulationPrediction:
-    """Load a saved model lazily and return JSON-friendly top-k predictions."""
+def _window_frames(signal: UnifiedSignalContainer, length: int, windows: int) -> list[np.ndarray]:
+    """Evenly spaced contiguous native-rate frames covering the capture.
+
+    Captures at or below the frame length, and any request for a single window,
+    fall back to the centred frame so existing behaviour is preserved exactly.
+    """
+
+    if signal.iq.size <= length or windows <= 1:
+        return [_fixed_iq(signal, length)]
+    starts = sorted({int(start) for start in np.linspace(0, signal.iq.size - length, windows)})
+    frames = []
+    for start in starts:
+        block = signal.iq[start : start + length]
+        values = np.stack([block.real, block.imag]).astype(np.float32)
+        power = np.sqrt(np.mean(values**2))
+        frames.append(values / power if power > 0 else values)
+    return frames
+
+
+def predict_modulation(
+    signal: UnifiedSignalContainer,
+    checkpoint_path: str | Path,
+    *,
+    top_k: int = 3,
+    windows: int = DEFAULT_INFERENCE_WINDOWS,
+) -> ModulationPrediction:
+    """Load a saved model lazily and return JSON-friendly top-k predictions.
+
+    Softmax vectors from `windows` frames are averaged, so the reported confidence
+    stays a probability on the same scale a single window produced and remains
+    comparable with the downstream fusion threshold.
+    """
 
     checkpoint = Path(checkpoint_path)
     if not checkpoint.exists():
@@ -57,11 +104,11 @@ def predict_modulation(signal: UnifiedSignalContainer, checkpoint_path: str | Pa
         model = ModulationCNN(int(payload.get("input_channels", 2)), len(labels))
         model.load_state_dict(payload["state_dict"])
         model.eval()
-        inputs = _fixed_iq(signal, int(payload.get("sample_length", 128)))
-        inputs = add_signal_features(inputs, include_engineered=payload.get("features", "iq") == "iqap")
-        inputs = torch.from_numpy(inputs).unsqueeze(0)
+        engineered = payload.get("features", "iq") == "iqap"
+        frames = _window_frames(signal, int(payload.get("sample_length", 128)), windows)
+        batch = np.stack([add_signal_features(frame, include_engineered=engineered) for frame in frames])
         with torch.inference_mode():
-            probabilities = torch.softmax(model(inputs), dim=1)[0].numpy()
+            probabilities = torch.softmax(model(torch.from_numpy(batch)), dim=1).mean(dim=0).numpy()
         indices = np.argsort(probabilities)[::-1][:top_k]
         predictions = tuple((labels[int(index)], float(probabilities[index])) for index in indices)
         return ModulationPrediction(predictions[0][0], predictions[0][1], predictions)

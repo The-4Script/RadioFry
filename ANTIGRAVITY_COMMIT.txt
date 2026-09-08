@@ -1,0 +1,135 @@
+ANTIGRAVITY COMMIT HANDOFF
+Branch: feature/synthetic-dataset-v1
+
+PURPOSE (one line)
+Add Synthetic Dataset V1 generator and evaluation harness, and fix three measured
+pipeline defects (CNN input adapter, symbol-rate feature, QAM amplitude scale).
+
+--------------------------------------------------------------------------------
+COMMIT THESE
+--------------------------------------------------------------------------------
+
+Modified production code (3 files):
+  src/radiofry/models/modulation_inference.py          native-rate windowing + 4-window
+                                                       mean-softmax inference
+  src/radiofry/dsp/parameter_estimation.py             adaptive symbol-rate feature selection
+  src/radiofry/decoding/demodulators/qam_demod.py      scale-invariant QAM slicing
+  src/radiofry/decoding/demodulators/dispatch.py       FSK-aware timing-offset selection
+
+Modified V1 generator (FSK deviation now an explicit swept dimension, default h=0.5):
+  src/radiofry/synthetic_gen/v1/config.py
+  src/radiofry/synthetic_gen/v1/generator.py
+  src/radiofry/synthetic_gen/v1/cli.py
+  src/radiofry/synthetic_gen/v1/__init__.py
+
+New source - Synthetic Dataset V1 generator:
+  src/radiofry/synthetic_gen/v1/__init__.py
+  src/radiofry/synthetic_gen/v1/__main__.py
+  src/radiofry/synthetic_gen/v1/channel.py
+  src/radiofry/synthetic_gen/v1/cli.py
+  src/radiofry/synthetic_gen/v1/config.py
+  src/radiofry/synthetic_gen/v1/generator.py
+  src/radiofry/synthetic_gen/v1/modulation.py
+  src/radiofry/synthetic_gen/v1/writers.py
+
+New source - V2.0 training pipeline:
+  src/radiofry/training/train_v2_synthetic.py
+
+Modified evaluation harness (optional --model checkpoint selection):
+  src/radiofry/evaluation/harness.py
+  src/radiofry/evaluation/cli.py
+
+New model artifacts (V2.0 synthetic-trained checkpoint, ~193 KB + metrics):
+  models_saved/modulation_cnn_v2_synth.pt
+  models_saved/modulation_cnn_v2_synth_metrics.json
+
+New source - evaluation harness:
+  src/radiofry/evaluation/__init__.py
+  src/radiofry/evaluation/__main__.py
+  src/radiofry/evaluation/cli.py
+  src/radiofry/evaluation/harness.py
+  src/radiofry/evaluation/metrics.py
+  src/radiofry/evaluation/report.py
+  src/radiofry/evaluation/symbol_rate_experiment.py
+
+New tests (15 files, 305 tests):
+  tests/test_synthetic_v1_modulation.py
+  tests/test_synthetic_v1_io.py
+  tests/test_synthetic_v1_dataset.py
+  tests/test_v1_harness.py
+  tests/test_v1_harness_metrics.py
+  tests/test_modulation_inference_input.py
+  tests/test_symbol_rate_diagnostics.py
+  tests/test_symbol_rate_feature_comparison.py
+  tests/test_symbol_rate_estimator_regression.py
+  tests/test_qam_demodulation_diagnostics.py
+  tests/test_qam_demodulation_scale.py
+  tests/test_qam_routing_diagnostics.py
+  tests/test_modulation_inference_windows.py
+  tests/test_fsk_timing_dispatch.py
+  tests/test_v2_training_pipeline.py
+
+Documentation:
+  BANK.md                      engineering change log, Entries 001-015
+  OP.md                        operational run log
+  ANTIGRAVITY_COMMIT.txt       this handoff file
+
+--------------------------------------------------------------------------------
+DO NOT COMMIT
+--------------------------------------------------------------------------------
+
+Generated data (~9.1 MB, fully reproducible from seeds recorded in ground truth):
+  data/synthetic_v1/                     8.8 MB, 30 captures
+  data/synthetic_v1_shortframe/          316 KB, 30 control captures
+
+Generated evaluation output (~2.2 MB, regenerable by re-running the harness):
+  reports/v1_baseline/
+  reports/v1_baseline_shortframe/
+  reports/v1_after_cnn_input_fix/
+  reports/v1_shortframe_after_cnn_input_fix/
+  reports/v1_after_symbol_rate_fix/
+  reports/v1_after_qam_scale_fix/
+  reports/symbol_rate_feature_comparison/
+  reports/v1_after_multiwindow/
+  reports/v1_after_fsk_sweep/
+  reports/v1_after_fsk_timing/
+  reports/v2_newmodel/
+
+NOTE: these paths are NOT matched by the current .gitignore (it only covers
+reports/*.png and data/synthetic/**/*.npy). They must be excluded manually when
+staging, or .gitignore updated in a SEPARATE commit. Do not use `git add -A`.
+All measured numbers from these artefacts are already recorded in BANK.md.
+
+Also exclude as usual: __pycache__/, .pytest_cache/, *.egg-info/
+
+--------------------------------------------------------------------------------
+SUGGESTED COMMIT MESSAGE
+--------------------------------------------------------------------------------
+
+feat: add Synthetic Dataset V1 with evaluation harness and fix three pipeline defects
+
+Adds a controlled, reproducible synthetic dataset generator (BPSK/QPSK/8PSK/BFSK/
+16QAM/64QAM, configurable rates and SNR sweep, AWGN only, full ground truth) plus a
+harness that scores the pipeline against it and reports unavailable metrics honestly.
+
+Baseline measurement exposed three defects, each fixed with a minimal change and
+regression tests:
+- modulation_inference: long captures were decimated 256x with no anti-alias filter;
+  now windowed at the native rate, and scored over 4 evenly spaced windows whose
+  softmax vectors are averaged. CNN top-1 on V1 0% -> 73%, 16QAM 0% -> 80%.
+- parameter_estimation: the envelope-squaring feature has an exact null at the symbol
+  rate for rectangular pulses; now selects among three features by confidence.
+  Symbol rate within 1% 0% -> 96.7%; BPSK/QPSK reach 0.000 BER at high SNR.
+- qam_demod: sliced against an unnormalised +/-1/+/-3 grid while the pipeline delivers
+  unit-RMS symbols; now scale-invariant. 16QAM/64QAM 0.000 BER when correctly routed.
+
+Together these take median strict BER on V1 from 0.4944 to 0.0293, with 16QAM reaching
+0.000 BER at 20 dB. Multi-window inference also raises fusion rejection 0.133 -> 0.200,
+costing three low-SNR captures that previously produced chance-level BER under a wrong
+label; fusion itself was not modified.
+
+Tests: 358 passed. The single failure (test_reed_solomon_round_trip) is pre-existing
+and environmental - reedsolo is not installed.
+
+Known remaining issue: BFSK still classifies at 0% and demodulates at ~0.51 BER. Not
+addressed here.

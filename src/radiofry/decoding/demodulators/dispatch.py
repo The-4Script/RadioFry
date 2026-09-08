@@ -21,6 +21,46 @@ class DispatchResult:
     message: str = ""
 
 
+_FSK_LABELS = {"CPFSK", "GFSK"}
+
+
+def _linear_timing_offset(iq: np.ndarray, samples_per_symbol: int) -> int:
+    """Offset whose decimated samples move least between symbols."""
+
+    candidates = range(min(samples_per_symbol, iq.size))
+    return min(
+        candidates,
+        key=lambda offset: float(np.mean(np.abs(np.diff(iq[offset::samples_per_symbol]))))
+        if iq[offset::samples_per_symbol].size > 1
+        else float("inf"),
+    )
+
+
+def _fsk_timing_offset(iq: np.ndarray, samples_per_symbol: int) -> int:
+    """Offset whose symbol windows hold the steadiest instantaneous frequency.
+
+    The linear heuristic is actively wrong for constant-envelope FSK: a window that
+    straddles a symbol boundary averages the two opposing tones, so its decimated
+    samples move *least* and it wins. Frequency variance inside the window instead
+    peaks on exactly those straddling offsets and is minimal when the window lines
+    up with a symbol. Uses only the received signal and samples-per-symbol.
+    """
+
+    if samples_per_symbol <= 1 or iq.size < 2 * samples_per_symbol:
+        return 0
+    frequency = np.diff(np.unwrap(np.angle(iq)), prepend=0.0)
+    best_offset, best_score = 0, float("inf")
+    for offset in range(min(samples_per_symbol, iq.size)):
+        usable = (frequency.size - offset) // samples_per_symbol * samples_per_symbol
+        if usable < samples_per_symbol:
+            continue
+        windows = frequency[offset : offset + usable].reshape(-1, samples_per_symbol)
+        score = float(np.mean(np.var(windows, axis=1)))
+        if score < best_score:
+            best_offset, best_score = offset, score
+    return best_offset
+
+
 def demodulate_capture(
     signal: UnifiedSignalContainer,
     modulation: str,
@@ -33,13 +73,8 @@ def demodulate_capture(
     if parameters.symbol_rate_hz is None or signal.sample_rate is None:
         return DispatchResult(None, False, "Demodulation requires both sample rate and symbol-rate estimates.")
     samples_per_symbol = max(1, round(signal.sample_rate / parameters.symbol_rate_hz))
-    candidate_offsets = range(min(samples_per_symbol, signal.iq.size))
-    timing_offset = min(
-        candidate_offsets,
-        key=lambda offset: float(np.mean(np.abs(np.diff(signal.iq[offset::samples_per_symbol]))))
-        if signal.iq[offset::samples_per_symbol].size > 1
-        else float("inf"),
-    )
+    select_offset = _fsk_timing_offset if modulation in _FSK_LABELS else _linear_timing_offset
+    timing_offset = select_offset(signal.iq, samples_per_symbol)
     symbol_samples = signal.iq[timing_offset::samples_per_symbol]
     try:
         if modulation in {"BPSK", "QPSK", "8PSK"}:
