@@ -34,6 +34,24 @@ _ANALOG_CONFIDENCE_FLOOR = 0.5
 _ANALOG_CONFIDENCE_SPAN = 0.4
 
 
+def _envelope_flatness(amplitude: np.ndarray) -> float:
+    """Spectral flatness of the envelope: geometric mean over arithmetic mean.
+
+    A constant-envelope waveform carries no message in `|s|`, so its envelope spectrum
+    is noise-like and flat (-> 1). An amplitude-modulated waveform puts the message's
+    discrete tones there, making it peaky (-> 0). Recorded as evidence only; it does not
+    take part in the family decision (BANK.md Entry 032).
+    """
+
+    centred = amplitude - np.mean(amplitude)
+    if not np.any(centred):
+        return 1.0
+    spectrum = np.abs(np.fft.rfft(centred * np.hanning(centred.size))) ** 2
+    spectrum = spectrum / (spectrum.sum() + 1e-30)
+    geometric = float(np.exp(np.mean(np.log(spectrum + 1e-20))))
+    return float(geometric / (float(np.mean(spectrum)) + 1e-20))
+
+
 def estimate_modulation_family(iq: np.ndarray) -> ClassicalFamilyEstimate:
     """Classify a waveform coarsely using envelope and instantaneous phase statistics."""
 
@@ -50,6 +68,7 @@ def estimate_modulation_family(iq: np.ndarray) -> ClassicalFamilyEstimate:
         "amplitude_cv": amplitude_cv,
         "frequency_cv": frequency_cv,
         "fourth_power_line": fourth_power_line,
+        "envelope_flatness": _envelope_flatness(amplitude),
     }
     if amplitude_cv < CLASSICAL_THRESHOLDS["amplitude_cv_psk"] and frequency_cv > CLASSICAL_THRESHOLDS["frequency_cv_fsk"]:
         family, confidence = "FSK-like", min(1.0, 0.55 + frequency_cv / 4)

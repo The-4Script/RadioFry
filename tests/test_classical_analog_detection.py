@@ -82,11 +82,13 @@ def test_analog_confidence_is_evidence_based_not_a_flat_constant() -> None:
     assert 0.5 <= weak.confidence <= strong.confidence <= 0.9
 
 
-def test_the_evidence_dictionary_still_exposes_the_three_features() -> None:
+def test_the_evidence_dictionary_still_exposes_the_original_features() -> None:
     estimate = estimate_modulation_family(_analog("wbfm", 20.0, carrier_offset_hz=20_000.0,
                                                  frequency_deviation_hz=15_000.0))
 
-    assert set(estimate.evidence) == {"amplitude_cv", "frequency_cv", "fourth_power_line"}
+    # Entry 032 added "envelope_flatness"; the Entry 027 features must all survive.
+    assert {"amplitude_cv", "frequency_cv", "fourth_power_line"} <= set(estimate.evidence)
+    assert "envelope_flatness" in estimate.evidence
     assert estimate.evidence["frequency_cv"] < ANALOG_FREQUENCY_CV_MAX
 
 

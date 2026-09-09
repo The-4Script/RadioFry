@@ -66,7 +66,10 @@ def test_classical_estimator_returns_a_structured_result() -> None:
 
     assert result.family
     assert 0 <= result.confidence <= 1
-    assert set(result.evidence) == {"amplitude_cv", "frequency_cv", "fourth_power_line"}
+    # Entry 032 added "envelope_flatness" as evidence. Assert the original three are
+    # still present rather than pinning an exact set, so the check is about nothing
+    # being REMOVED - which is what this test actually guards.
+    assert {"amplitude_cv", "frequency_cv", "fourth_power_line"} <= set(result.evidence)
 
 
 def test_classical_evaluation_returns_snr_metrics() -> None:
