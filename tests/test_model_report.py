@@ -11,6 +11,7 @@ from radiofry.models.modulation_cnn import ModulationCNN
 from radiofry.models.signal_features import add_signal_features
 from radiofry.reporting.report_builder import build_pdf_report, build_report, report_json
 from radiofry.dsp.parameter_estimation import ParameterEstimate
+from radiofry.dsp.cyclostationary import ClassicalFamilyEstimate
 from radiofry.training.train_modulation import load_rml_dataset
 
 
@@ -112,7 +113,7 @@ def test_pipeline_classifies_fec_after_deinterleaving(monkeypatch: pytest.Monkey
 
     monkeypatch.setattr(pipeline, "preprocess", lambda signal, target_sample_rate=None: signal)
     monkeypatch.setattr(pipeline, "estimate_parameters", lambda signal: {})
-    monkeypatch.setattr(pipeline, "estimate_modulation_family", lambda iq: type("Classical", (), {"family": "PSK-like"})())
+    monkeypatch.setattr(pipeline, "estimate_modulation_family", lambda iq: ClassicalFamilyEstimate(family="PSK-like", confidence=1.0, evidence={}))
     monkeypatch.setattr(pipeline, "predict_modulation", lambda signal, model_path: DummyPrediction())
     monkeypatch.setattr(pipeline, "predict_bitstream", lambda bits, model_path: classified_inputs.append(np.array(bits)) or DummyPrediction())
     monkeypatch.setattr(pipeline, "search_deinterleave", lambda bits, interleaver_type: DummyDeinterleaving())
