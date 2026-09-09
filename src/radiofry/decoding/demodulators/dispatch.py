@@ -10,6 +10,7 @@ from radiofry.dsp.parameter_estimation import ParameterEstimate
 from .analog_demod import demodulate_am, demodulate_fm, demodulate_ssb
 from .common import DemodulationResult
 from .fsk_demod import demodulate_fsk
+from .pam_demod import demodulate_pam
 from .psk_demod import demodulate_psk
 from .qam_demod import demodulate_qam
 
@@ -123,6 +124,8 @@ def demodulate_capture(
             result = demodulate_fsk(symbol_samples, order=2)
         elif modulation in {"QAM16", "QAM64"}:
             result = demodulate_qam(symbol_samples, int(modulation[3:]))
+        elif modulation == "PAM4":
+            result = demodulate_pam(symbol_samples, order=4)
         else:
             # Analog labels never reach here - they return from _demodulate_analog above.
             return DispatchResult(None, False, f"No demodulator is registered for {modulation}.")
