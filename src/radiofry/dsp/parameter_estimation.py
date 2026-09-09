@@ -36,6 +36,61 @@ SYMBOL_RATE_FEATURES = {
 }
 
 
+# Cyclostationary symbol-rate estimation (BANK.md Entry 038).
+#
+# A signal built from symbols at rate Rs is cyclostationary with cycle frequencies at
+# k*Rs, so the cyclic autocorrelation
+#
+#     R^alpha(tau) = (1/N) sum_n p(n) p*(n-tau) exp(-j 2 pi alpha n / Fs)
+#
+# is non-zero at alpha = Rs. Computing it as an FFT of the lag product gives every alpha
+# at once, so the whole scan costs a handful of FFTs. `p` is the instantaneous frequency,
+# which for FSK is a PAM-like waveform at the symbol rate.
+#
+# For a linearly modulated signal the alpha = Rs term is proportional to the pulse-
+# spectrum overlap sum_f G(f) G*(f - Rs), so it exists only when the pulse has excess
+# bandwidth. A rectangular CPFSK frequency pulse has it; a Gaussian GFSK pulse
+# deliberately does not, and measurement confirms the feature is absent there. The
+# estimate is therefore gated on its own peak-to-background ratio, and the existing
+# adaptive features stay in charge whenever the cyclic evidence is weak.
+#
+# Measured over 120 FSK captures (2 modulations x sps 4/8/16/32 x SNR 20/15/10 x 5 seeds):
+# a gate of 6.0 gained 4 correct estimates with ZERO regressions, while lower gates gained
+# more but regressed 4-8 captures.
+CYCLIC_LAGS = (1, 2, 3, 4, 6, 8)
+CYCLIC_PEAK_RATIO_MIN = 6.0
+_CYCLIC_ALPHA_MIN_HZ = 500.0
+
+
+def _cyclic_symbol_rate(iq: np.ndarray, sample_rate: float) -> tuple[float | None, float]:
+    """Blind cycle-frequency estimate and its peak-to-background ratio."""
+
+    samples = np.asarray(iq, dtype=np.complex64)
+    if samples.size < 64 or sample_rate is None or sample_rate <= 0:
+        return None, 0.0
+    frequency = np.diff(np.unwrap(np.angle(samples)), prepend=0.0).astype(np.float64)
+    frequency = frequency - frequency.mean()
+    profile = None
+    for lag in CYCLIC_LAGS:
+        if frequency.size <= lag:
+            continue
+        product = frequency[lag:] * frequency[:-lag]
+        product = product - product.mean()
+        magnitude = np.abs(np.fft.fft(product, n=frequency.size))
+        profile = magnitude if profile is None else profile + magnitude
+    if profile is None:
+        return None, 0.0
+    alphas = np.fft.fftfreq(frequency.size, d=1 / sample_rate)
+    band = (alphas >= _CYCLIC_ALPHA_MIN_HZ) & (alphas <= sample_rate / 4)
+    if not np.any(band):
+        return None, 0.0
+    candidates, strengths = alphas[band], profile[band]
+    index = int(np.argmax(strengths))
+    background = float(np.median(strengths))
+    ratio = float(strengths[index] / (background + 1e-12))
+    return float(candidates[index]), ratio
+
+
 def _occupied_band(psd: np.ndarray, frequencies: np.ndarray, fraction: float) -> tuple[float, float]:
     power = np.maximum(psd, 0)
     total = float(np.sum(power))
@@ -129,6 +184,15 @@ def estimate_parameters(
             continue
         if symbol_rate_confidence is None or confidence > symbol_rate_confidence:
             symbol_rate, symbol_rate_confidence, symbol_rate_feature = rate, confidence, name
+    # Entry 038: a strong cyclic feature beats the transition-based features, which lose
+    # the symbol-rate line above samples-per-symbol 8. Gated so a weak feature changes
+    # nothing.
+    cyclic_rate, cyclic_ratio = _cyclic_symbol_rate(signal.iq, signal.sample_rate)
+    if cyclic_rate is not None and cyclic_ratio >= CYCLIC_PEAK_RATIO_MIN:
+        symbol_rate = cyclic_rate
+        symbol_rate_feature = "cyclic_autocorrelation"
+        symbol_rate_confidence = float(np.clip(cyclic_ratio / (cyclic_ratio + 10.0), 0.0, 1.0))
+
     return ParameterEstimate(
         abs(upper - lower),
         snr_db,

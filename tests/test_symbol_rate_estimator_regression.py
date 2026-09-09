@@ -82,7 +82,10 @@ def test_the_original_envelope_feature_remains_available_and_unchanged() -> None
 def test_estimate_reports_which_feature_was_selected() -> None:
     estimate = _estimate("QPSK", pulse="rect", snr_db=None)
 
-    assert estimate.symbol_rate_feature in SYMBOL_RATE_FEATURES
+    # Entry 038 added a fourth legitimate source, the cyclic autocorrelation, which is
+    # not one of the pre-FFT nonlinearities in SYMBOL_RATE_FEATURES. The test's purpose -
+    # the estimate must say which source produced it - is unchanged.
+    assert estimate.symbol_rate_feature in set(SYMBOL_RATE_FEATURES) | {"cyclic_autocorrelation"}
 
 
 def test_envelope_feature_is_selected_for_a_shaped_signal_it_handles_well() -> None:
