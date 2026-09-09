@@ -21,6 +21,15 @@ from .runtime import check_runtime_artifacts
 
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+# BANK.md Entry 040. The previous default, `modulation_cnn.pt`, is an 11-class RadioML
+# model; Entry 039 measured it at 35.4% fused accuracy on RadioFry's own synthetic
+# distribution, collapsing to 10.4% at 32 samples per symbol. This checkpoint is trained
+# by `training/train_v2_synthetic.py` across samples-per-symbol 4/8/16/32 and measures
+# 99.5% fused on held-out seeds. It is digital-only: analog subtypes are decided by the
+# classical gate (Entry 032), which never consulted the CNN, and analog routing was
+# verified unchanged at 6/6 for AM-DSB, AM-SSB and WBFM. The RadioML checkpoint is
+# retained in models_saved/ so the Entry 039 baseline stays reproducible.
+DEFAULT_MODULATION_MODEL = "models_saved/modulation_cnn_v3_spsaug.pt"
 DEFAULT_MAX_CAPTURE_BYTES = 64 * 1024 * 1024
 DEFAULT_MAX_CAPTURE_SAMPLES = 5_000_000
 
@@ -52,7 +61,7 @@ def analyze_capture(
     signal: UnifiedSignalContainer,
     *,
     target_sample_rate: float | None = None,
-    model_path: str | Path = "models_saved/modulation_cnn.pt",
+    model_path: str | Path = DEFAULT_MODULATION_MODEL,
     bits: Any | None = None,
     interleaver_model_path: str | Path = "models_saved/interleaver_classifier.pkl",
     fec_model_path: str | Path = "models_saved/fec_classifier.pkl",

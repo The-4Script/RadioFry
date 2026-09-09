@@ -39,6 +39,12 @@ from radiofry.synthetic_gen.v1 import (
 FRAME_LENGTH = 128
 SAMPLE_RATE_HZ = 200_000.0
 SAMPLES_PER_SYMBOL = 8
+# Entry 040: the V2 checkpoint was trained at a single oversampling factor, and Entry 039
+# measured the consequence - fused accuracy 68.8% at sps 8 but 16.7% at sps 4 and 10.4%
+# at sps 32. Training across the sweep lifts that to 95.8-100%. The capture SAMPLE COUNT
+# is held constant, so higher oversampling means proportionally fewer symbols, matching
+# what the runtime actually sees.
+SAMPLES_PER_SYMBOL_SWEEP: tuple[int, ...] = (4, 8, 16, 32)
 NUM_SYMBOLS = 1_024
 SNR_SWEEP_DB: tuple[float, ...] = (20.0, 15.0, 10.0, 5.0, 0.0)
 FSK_INDICES: tuple[float, ...] = (0.5, 1.0)
@@ -59,11 +65,12 @@ class CaptureSpec:
     snr_db: float
     seed: int
     fsk_modulation_index: float | None
+    samples_per_symbol: int = SAMPLES_PER_SYMBOL
 
     @property
     def capture_id(self) -> str:
         index = "" if self.fsk_modulation_index is None else f"_h{self.fsk_modulation_index}"
-        return f"{self.modulation}{index}_snr{self.snr_db:g}dB_s{self.seed}"
+        return f"{self.modulation}{index}_sps{self.samples_per_symbol}_snr{self.snr_db:g}dB_s{self.seed}"
 
 
 def build_capture_specs(
@@ -72,6 +79,7 @@ def build_capture_specs(
     seed_base: int,
     modulations: Sequence[str] = tuple(MODULATIONS),
     snr_sweep_db: Sequence[float] = SNR_SWEEP_DB,
+    samples_per_symbol_sweep: Sequence[int] = SAMPLES_PER_SYMBOL_SWEEP,
 ) -> list[CaptureSpec]:
     """Enumerate captures; FSK is swept over both modulation indices."""
 
@@ -81,18 +89,20 @@ def build_capture_specs(
         is_fsk = MODULATIONS[modulation].family == "fsk"
         indices: tuple[float | None, ...] = FSK_INDICES if is_fsk else (None,)
         for index in indices:
-            for snr_db in snr_sweep_db:
-                for _ in range(replicates):
-                    specs.append(
-                        CaptureSpec(
-                            modulation=modulation,
-                            label=MODULATIONS[modulation].radiofry_label,
-                            snr_db=float(snr_db),
-                            seed=seed_base + counter,
-                            fsk_modulation_index=index,
+            for sps in samples_per_symbol_sweep:
+                for snr_db in snr_sweep_db:
+                    for _ in range(replicates):
+                        specs.append(
+                            CaptureSpec(
+                                modulation=modulation,
+                                label=MODULATIONS[modulation].radiofry_label,
+                                snr_db=float(snr_db),
+                                seed=seed_base + counter,
+                                fsk_modulation_index=index,
+                                samples_per_symbol=int(sps),
+                            )
                         )
-                    )
-                    counter += 1
+                        counter += 1
     return specs
 
 
@@ -101,8 +111,9 @@ def render_capture(spec: CaptureSpec) -> np.ndarray:
 
     sample_spec = SampleSpec(
         modulation=spec.modulation,
-        num_symbols=NUM_SYMBOLS,
-        samples_per_symbol=SAMPLES_PER_SYMBOL,
+        # Constant capture length: fewer symbols as oversampling rises.
+        num_symbols=NUM_SYMBOLS * SAMPLES_PER_SYMBOL // spec.samples_per_symbol,
+        samples_per_symbol=spec.samples_per_symbol,
         sample_rate_hz=SAMPLE_RATE_HZ,
         snr_db=spec.snr_db,
         seed=spec.seed,
@@ -294,6 +305,7 @@ def train_v2(
         "labels": labels,
         "input_channels": 4,
         "sample_length": FRAME_LENGTH,
+        "samples_per_symbol_sweep": list(SAMPLES_PER_SYMBOL_SWEEP),
         "features": "iqap",
         "dataset": "radiofry.synthetic_gen.v1 (V2.0 training build)",
         "seed": torch_seed,
