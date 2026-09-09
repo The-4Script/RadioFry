@@ -44,6 +44,12 @@ UNAVAILABLE_METRICS: dict[str, str] = {
         "detection is counted as a false positive."
     ),
     "soft_decision_quality": "The demodulators emit hard bits only; no soft/LLR output exists to score.",
+    "bit_error_rate_analog": (
+        "An analog capture carries no transmitted bits, so it has no bit-error rate. The "
+        "dispatcher still synthesises bits for analog labels by thresholding the demodulated "
+        "waveform at its median; those are never scored, because comparing them to anything "
+        "would publish a meaningless number."
+    ),
     "calibrated_confidence": (
         "CNN confidence is a raw softmax value and fusion trust is a hand-set formula. Neither is "
         "calibrated, so no calibration error is reported."
@@ -111,6 +117,11 @@ def evaluate_capture(
     truth = load_ground_truth(root / row["ground_truth_file"])
     metadata = truth["metadata"]
     source_bits = truth["source_bits"]
+    has_source_bits = source_bits is not None
+    # Bit-less (analog) captures still need an array to hand to the scorer, but must
+    # never be treated as having zero-length ground truth to compare against.
+    scoreable_bits = source_bits if has_source_bits else np.array([], dtype=np.uint8)
+    no_bits_reason = "analog_no_transmitted_bits"
 
     record = _blank_record()
     record.update(
@@ -131,7 +142,7 @@ def evaluate_capture(
         truth_snr_db=metadata["noise"]["target_snr_db"],
         truth_interleaver=metadata["impairments"]["interleaving"],
         truth_fec=metadata["impairments"]["fec"],
-        expected_bits=int(source_bits.size),
+        expected_bits=int(source_bits.size) if has_source_bits else None,
         bandwidth_status="unavailable_no_ground_truth",
         ingestion_ok=False,
         ingestion_error="",
@@ -139,7 +150,8 @@ def evaluate_capture(
         pipeline_error="",
         end_to_end_status="ingestion_failed",
     )
-    record.update(_unscored_bits(source_bits, "demodulation_unavailable"))
+    record.update(_unscored_bits(
+        scoreable_bits, "demodulation_unavailable" if has_source_bits else no_bits_reason))
 
     capture_rel = row.get(f"{file_format}_file", "")
     if not capture_rel:
@@ -160,7 +172,7 @@ def evaluate_capture(
         return record
 
     record["pipeline_ok"] = True
-    _score_report(record, report, source_bits)
+    _score_report(record, report, scoreable_bits, has_bits=has_source_bits)
     return record
 
 
@@ -177,7 +189,13 @@ def _unscored_bits(source_bits: np.ndarray, reason: str) -> dict[str, Any]:
     }
 
 
-def _score_report(record: dict[str, Any], report: dict[str, Any], source_bits: np.ndarray) -> None:
+def _score_report(
+    record: dict[str, Any],
+    report: dict[str, Any],
+    source_bits: np.ndarray,
+    *,
+    has_bits: bool = True,
+) -> None:
     stages = report.get("stages", {}) or {}
     parameters = stages.get("parameters") or {}
     classical = stages.get("classical_modulation") or {}
@@ -243,11 +261,20 @@ def _score_report(record: dict[str, Any], report: dict[str, Any], source_bits: n
         demod_scheme=result.get("modulation"),
         demod_message=demodulation.get("message", ""),
     )
+    # A bit-less capture is never scored, even though `dispatch` hands back
+    # median-threshold bits for analog labels.
+    scoreable = has_bits and demod_available and recovered is not None
     scored = score_bits(
         source_bits,
-        recovered if demod_available else None,
-        available=demod_available and recovered is not None,
-        reason="" if demod_available else "demodulation_unavailable",
+        recovered if scoreable else None,
+        available=scoreable,
+        reason=(
+            ""
+            if scoreable
+            else "analog_no_transmitted_bits"
+            if not has_bits
+            else "demodulation_unavailable"
+        ),
     )
     record.update(
         ber_status=scored.status,
@@ -257,7 +284,11 @@ def _score_report(record: dict[str, Any], report: dict[str, Any], source_bits: n
         ber_alignment_offset=scored.alignment_offset,
         compared_bits=scored.compared_bits,
         recovered_bits=scored.recovered_bits,
-        bit_count_ratio=relative_ratio(float(scored.recovered_bits), float(scored.expected_bits)),
+        bit_count_ratio=(
+            relative_ratio(float(scored.recovered_bits), float(scored.expected_bits))
+            if has_bits
+            else None
+        ),
     )
 
     # --- downstream stages whose V1 ground truth is "none"

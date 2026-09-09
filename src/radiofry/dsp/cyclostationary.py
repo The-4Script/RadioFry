@@ -19,6 +19,20 @@ CLASSICAL_THRESHOLDS = {
     "fourth_power_psk": 0.2,
 }
 
+# Positive family-level analog evidence (BANK.md Entry 027).
+#
+# `frequency_cv = std(dphi) / mean(|dphi|)` measures how *impulsive* the instantaneous
+# frequency is. A digital signal jumps at symbol boundaries and sits still between them,
+# so its phase increments are heavy-tailed and std >> mean|.|. An analog signal's
+# instantaneous frequency moves smoothly, so the two are comparable.
+#
+# Measured over 800 digital controls (8 modulations x samples-per-symbol 4/8/16/32 x
+# SNR 0-20 dB x 5 seeds) the lowest value seen anywhere was 1.032 (BFSK at sps=4).
+# 0.9 leaves ~13% margin below that and produced 0/800 false positives.
+ANALOG_FREQUENCY_CV_MAX = 0.9
+_ANALOG_CONFIDENCE_FLOOR = 0.5
+_ANALOG_CONFIDENCE_SPAN = 0.4
+
 
 def estimate_modulation_family(iq: np.ndarray) -> ClassicalFamilyEstimate:
     """Classify a waveform coarsely using envelope and instantaneous phase statistics."""
@@ -41,8 +55,21 @@ def estimate_modulation_family(iq: np.ndarray) -> ClassicalFamilyEstimate:
         family, confidence = "FSK-like", min(1.0, 0.55 + frequency_cv / 4)
     elif amplitude_cv < CLASSICAL_THRESHOLDS["amplitude_cv_qam"] and fourth_power_line > CLASSICAL_THRESHOLDS["fourth_power_psk"]:
         family, confidence = "PSK-like", min(1.0, 0.5 + fourth_power_line / 2)
+    elif (
+        frequency_cv < ANALOG_FREQUENCY_CV_MAX
+        and fourth_power_line < CLASSICAL_THRESHOLDS["fourth_power_psk"]
+    ):
+        # Positive analog evidence, not a leftover bucket: the instantaneous frequency
+        # is smooth (no symbol-transition impulses) and there is no PSK carrier line.
+        # Deliberately family-level - it says "analog", never which analog scheme.
+        # Confidence scales with how far below the threshold the evidence sits.
+        margin = 1.0 - frequency_cv / ANALOG_FREQUENCY_CV_MAX
+        family = "analog-like"
+        confidence = _ANALOG_CONFIDENCE_FLOOR + _ANALOG_CONFIDENCE_SPAN * margin
     elif amplitude_cv >= CLASSICAL_THRESHOLDS["amplitude_cv_qam"]:
         family, confidence = "QAM-like", min(1.0, 0.45 + amplitude_cv / 2)
     else:
-        family, confidence = "analog-like", 0.45
+        # Nothing matched. "unknown" rather than "analog-like": analog is now a
+        # positive verdict and must not be handed out by elimination.
+        family, confidence = "unknown", 0.2
     return ClassicalFamilyEstimate(family, confidence, evidence)

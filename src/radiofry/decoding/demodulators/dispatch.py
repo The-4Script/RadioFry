@@ -23,6 +23,10 @@ class DispatchResult:
 
 _FSK_LABELS = {"CPFSK", "GFSK"}
 
+# Analog labels take a separate path: they have no symbol rate, so the digital
+# timing/decimation stage must not run for them (BANK.md Entries 025, 028).
+ANALOG_LABELS = frozenset({"AM-DSB", "AM-SSB", "WBFM"})
+
 
 def _linear_timing_offset(iq: np.ndarray, samples_per_symbol: int) -> int:
     """Offset whose decimated samples move least between symbols."""
@@ -61,6 +65,40 @@ def _fsk_timing_offset(iq: np.ndarray, samples_per_symbol: int) -> int:
     return best_offset
 
 
+def _demodulate_analog(
+    signal: UnifiedSignalContainer,
+    modulation: str,
+    parameters: ParameterEstimate,
+) -> DispatchResult:
+    """Demodulate an analog capture at its native rate.
+
+    An analog signal has no symbol rate, so none is required and none is used: no
+    samples-per-symbol, no timing search and no decimation. Decimating by an estimated
+    symbol rate previously folded message tones above the resulting Nyquist frequency
+    (Entry 025 measured 2 of 3 tones aliasing).
+    """
+
+    try:
+        if modulation == "WBFM":
+            analog = demodulate_fm(signal.iq)
+        elif modulation == "AM-SSB":
+            if signal.sample_rate is None:
+                return DispatchResult(
+                    None, False, "AM-SSB product detection requires a sample rate.")
+            # The full capture rate, not a symbol-rate-derived one.
+            analog = demodulate_ssb(signal.iq, signal.sample_rate, parameters.carrier_frequency_hz)
+        else:
+            analog = demodulate_am(signal.iq)
+    except ValueError as error:
+        return DispatchResult(None, False, f"Demodulation failed: {error}")
+    # Bits stay median-threshold and physically meaningless; the Entry 021 harness guard
+    # refuses to score them. Preserved so analog reporting behaviour does not change.
+    result = DemodulationResult(
+        analog, np.asarray(analog > np.median(analog), dtype=np.uint8), modulation)
+    return DispatchResult(
+        result, True, "Analog demodulation used the full-rate capture; no symbol rate is required.")
+
+
 def demodulate_capture(
     signal: UnifiedSignalContainer,
     modulation: str,
@@ -70,6 +108,8 @@ def demodulate_capture(
 
     if modulation in {"Unclassified", "unknown", ""}:
         return DispatchResult(None, False, "Demodulation skipped because modulation is unclassified.")
+    if modulation in ANALOG_LABELS:
+        return _demodulate_analog(signal, modulation, parameters)
     if parameters.symbol_rate_hz is None or signal.sample_rate is None:
         return DispatchResult(None, False, "Demodulation requires both sample rate and symbol-rate estimates.")
     samples_per_symbol = max(1, round(signal.sample_rate / parameters.symbol_rate_hz))
@@ -83,16 +123,8 @@ def demodulate_capture(
             result = demodulate_fsk(symbol_samples, order=2)
         elif modulation in {"QAM16", "QAM64"}:
             result = demodulate_qam(symbol_samples, int(modulation[3:]))
-        elif modulation in {"AM-DSB", "AM-SSB", "WBFM"}:
-            if modulation == "WBFM":
-                analog = demodulate_fm(symbol_samples)
-            elif modulation == "AM-SSB":
-                effective_sample_rate = signal.sample_rate / samples_per_symbol
-                analog = demodulate_ssb(symbol_samples, effective_sample_rate, parameters.carrier_frequency_hz)
-            else:
-                analog = demodulate_am(symbol_samples)
-            result = DemodulationResult(analog, np.asarray(analog > np.median(analog), dtype=np.uint8), modulation)
         else:
+            # Analog labels never reach here - they return from _demodulate_analog above.
             return DispatchResult(None, False, f"No demodulator is registered for {modulation}.")
         return DispatchResult(result, True, f"Used approximately {samples_per_symbol} samples per symbol after coarse timing search (offset {timing_offset}).")
     except ValueError as error:

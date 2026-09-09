@@ -7,6 +7,8 @@ import numpy as np
 
 from radiofry.contracts import UnifiedSignalContainer
 
+from .sidecar import read_sigmf_sidecar
+
 
 @dataclass(frozen=True)
 class IQFormat:
@@ -47,9 +49,18 @@ def read_iq(
         raise ValueError(f"IQ file exceeds the {max_samples:,}-sample limit")
     pairs = values.reshape(-1, 2)
     iq = pairs[:, 0].astype(np.float32) + 1j * pairs[:, 1].astype(np.float32)
+    metadata = {"dtype": fmt.dtype, "byte_order": fmt.byte_order, "path": str(path)}
+    # A headerless IQ file cannot carry the tuner frequency; a SigMF sidecar can. Absent
+    # or malformed metadata leaves the fields out entirely rather than inventing a value.
+    sidecar = read_sigmf_sidecar(file_path)
+    if "center_frequency_hz" in sidecar:
+        metadata["center_frequency_hz"] = sidecar["center_frequency_hz"]
+        metadata["center_frequency_source"] = "sigmf_sidecar"
+    if sample_rate is None:
+        sample_rate = sidecar.get("sample_rate_hz")
     return UnifiedSignalContainer(
         iq=iq,
         sample_rate=sample_rate,
         source_format="iq",
-        metadata={"dtype": fmt.dtype, "byte_order": fmt.byte_order, "path": str(path)},
+        metadata=metadata,
     )

@@ -71,7 +71,10 @@ def analyze_capture(
     fusion = None
     if prediction.available:
         from .fusion.confidence_fusion import fuse_modulation
-        fusion = fuse_modulation(prediction.label, prediction.confidence, classical.family, alternatives=tuple(label for label, _ in prediction.top_k[1:]))
+        # top_k[1:] is already ranked by the CNN; pass the confidences through too so
+        # fusion can recover an analog label without a second inference pass.
+        ranked = tuple((label, confidence) for label, confidence in prediction.top_k[1:])
+        fusion = fuse_modulation(prediction.label, prediction.confidence, classical.family, alternatives=tuple(label for label, _ in ranked), ranked_alternatives=ranked)
     demodulation = None
     if bits is None and fusion is not None:
         dispatched = demodulate_capture(processed, fusion.label, parameters)

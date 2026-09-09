@@ -8,6 +8,8 @@ from scipy.signal import hilbert
 
 from radiofry.contracts import UnifiedSignalContainer
 
+from .sidecar import read_sigmf_sidecar
+
 
 def _scale_audio(samples: np.ndarray) -> np.ndarray:
     if np.issubdtype(samples.dtype, np.integer):
@@ -40,9 +42,16 @@ def read_wav(
         channel_mode = "mono_analytic"
     else:
         raise ValueError("WAV input must be mono or two-channel stereo")
+    metadata = {"channel_mode": channel_mode, "path": str(path)}
+    # An ordinary WAV header has no field for an RF tuning frequency, so a sidecar is
+    # the reliable route. The WAV's own sample rate is authoritative and is not overridden.
+    sidecar = read_sigmf_sidecar(file_path)
+    if "center_frequency_hz" in sidecar:
+        metadata["center_frequency_hz"] = sidecar["center_frequency_hz"]
+        metadata["center_frequency_source"] = "sigmf_sidecar"
     return UnifiedSignalContainer(
         iq=iq,
         sample_rate=float(sample_rate),
         source_format="wav",
-        metadata={"channel_mode": channel_mode, "path": str(path)},
+        metadata=metadata,
     )

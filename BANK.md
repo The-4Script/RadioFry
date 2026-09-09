@@ -2700,3 +2700,1695 @@ src/radiofry/evaluation/symbol_rate_experiment.py   NOT changed - already pinned
 
 The infrastructure is now safe for analog captures. Analog generation itself remains
 unimplemented and is the next task when approved.
+
+---
+
+## Entry 020 - 2026-09-09 - AM-DSB analog synthetic generation + independent oracle
+
+First analog scheme implemented, following the Entry 018 design. **AM-SSB and WBFM are
+NOT implemented.** No CNN, training, dispatch, fusion, analog demodulator, PAM4/GFSK or
+frozen V1 change.
+
+### Implementation - one new file, zero existing production files modified
+
+`src/radiofry/synthetic_gen/v1/analog.py` (240 lines) is the only production file
+touched. `config.py`, `modulation.py`, `generator.py`, `analog_demod.py` and
+`dispatch.py` are all byte-for-byte unchanged at 204 / 97 / 400 / 30 / 99 lines.
+
+**Key architectural decision: a separate analog registry.** `ANALOG_MODULATIONS` is
+deliberately *not* `config.MODULATIONS`. Three call sites default to
+`tuple(MODULATIONS)` - the V1 `DatasetSpec`, the V2 training capture builder, and the
+symbol-rate experiment - so keeping analog out of that registry means none of them can
+silently widen. This resolves Entry 018's risk #1 structurally rather than by patching
+three defaults.
+
+Analog captures cannot use `SampleSpec`, whose entire contract is
+`num_symbols * bits_per_symbol`. They get `AnalogSampleSpec`, which has **no**
+`symbol_rate_hz`, `samples_per_symbol`, `num_symbols` or `bits_seed` field at all -
+asserted by test. Everything else is reused unchanged: the existing `add_awgn` channel,
+the existing `write_iq_file` / `write_wav_file` writers, and `_file_entry` / `_sha256`
+from the digital generator.
+
+### AM-DSB parameter choices
+
+| Parameter | Value | Rationale |
+|---|---|---|
+| Model | `x(t) = (1 + m*s(t)) * exp(j*2*pi*fc*t)` | complex baseband; carrier retained so envelope detection is valid |
+| Modulation depth `m` | 0.5 | Entry 018 default; keeps `1 + m*s(t)` strictly positive (measured min envelope 0.4+) |
+| Carrier offset `fc` | 0.0 Hz default, configurable | matches the V1 baseband convention; tests cover 0 and 12 kHz so the oracle genuinely exercises carrier placement |
+| Message | 3 tones, 300-3000 Hz | deterministic multi-tone per Entry 018, no audio assets |
+| Message normalisation | peak-normalised to 1.0, zero mean | bounds the envelope and makes correlation well-conditioned |
+| Sample rate / length | 200 kHz / 32 768 samples (0.164 s) | matches the digital V1 convention |
+| Noise | existing `add_awgn`, same total-band SNR definition | consistent with every digital capture |
+
+With `fc = 0` the waveform is real-valued, which is the correct baseband DSB form.
+
+### Ground truth
+
+Adds `capture_kind: "analog"`, an `analog` block (`scheme`, `carrier_offset_hz`,
+`modulation_depth`) and a `message` block (`type`, `num_tones`, `tone_band_hz`, the
+explicit tone list with frequency/amplitude/phase, `peak_normalised`, `message_file`,
+`message_sha256`). The message is written as an `.npy` beside the capture so validation
+can be done independently of the generator.
+
+**Every bit-derived field is explicitly null, never zero and never fabricated:**
+`bits` (the whole block), `modulation.{order, bits_per_symbol, bit_mapping,
+constellation_normalization, pulse_shape}`, `signal.{symbol_rate_hz, samples_per_symbol,
+fsk_deviation_hz, fsk_modulation_index, gaussian_bt}`, `noise.{es_n0_db, eb_n0_db}`.
+
+### The oracle - independent, not a re-run of the generator
+
+The oracle re-derives expected structure from the recorded tone list and recovers the
+message with its own detector, rather than calling generator code.
+
+| Oracle check | Result |
+|---|---|
+| Carrier present at the expected frequency | PASS at fc = 0 Hz and fc = 12 kHz (spectral peak within 40 Hz) |
+| Symmetric sidebands at fc +/- each tone | PASS - both sidebands > 20x the noise floor, and upper/lower match within 25% |
+| Sideband amplitude tracks modulation depth | PASS - the m=0.8 sideband/carrier ratio exceeds m=0.2 by > 3x |
+| Envelope recovery on a clean capture | **correlation > 0.99** with the known message |
+| Envelope recovery with a carrier offset | > 0.99 at both fc = 0 and fc = 12 kHz |
+| Recovery across the SNR range | > 0.95 at 30 dB, > 0.90 at 20 dB, > 0.60 at 10 dB |
+| Message spectrum shows exactly the declared tones | PASS - every declared tone > 20x floor |
+
+**This validates the generator, not RadioFry.** No claim is made about production
+demodulation: `dispatch` still decimates analog by an estimated symbol rate and
+synthesises median-threshold bits (Entry 018 measured facts 3 and 4), and none of that
+was touched here.
+
+### Tests
+
+New `tests/test_synthetic_am_dsb.py`, **31 tests**: registry separation and the explicit
+absence of AM-SSB/WBFM, scheme validation, deterministic message generation, seed
+sensitivity, peak normalisation, tone-band compliance, message spectrum, deterministic
+AM-DSB generation, envelope positivity, shape/dtype, the seven oracle checks above,
+ground-truth contract, message block with SHA-256 verification, null bit-derived fields,
+absence of any symbol-rate field, capture file writing, byte-level reproducibility, and
+readability through the existing `load_capture`.
+
+- Focused: **31 passed**
+- Full suite: **446 passed** (up from 415), same single pre-existing `reedsolo` failure
+
+### Digital / V1 preservation - verified
+
+| Check | Result |
+|---|---|
+| Frozen V1 aggregate .iq SHA-256 | `d6d3f918687d0700a43e46211c3f04b9` (40 captures) - **unchanged** |
+| Digital registry | `['16QAM','64QAM','8PSK','BFSK','BPSK','GFSK','PAM4','QPSK']` - unchanged, no analog |
+| `symbol_rate_experiment.MODULATIONS` | still the six digital names |
+| Existing digital generator files | byte-for-byte unchanged |
+
+### Artifacts
+
+**None written to the repository.** All tests generate captures into pytest `tmp_path`.
+`data/` still holds only `synthetic_v1` (12 MB) and `synthetic_v1_shortframe`. No analog
+dataset was generated.
+
+### Known limitations
+
+- Only AM-DSB. AM-SSB and WBFM remain unimplemented by instruction.
+- Analog captures are not wired into any dataset builder, manifest, harness path or
+  training set - this is generation plus oracle only. The harness has never seen an
+  analog capture, so the Entry 019 `analog -> analog-like` family fix is still untested
+  end-to-end.
+- `analog.py` is not exported from the package `__init__.py`; it is imported by its own
+  path. That was deliberate, to keep the change to exactly one new file.
+- Entry 018's measured facts 3 and 4 still stand: production analog demodulation would
+  decimate by a meaningless symbol rate and publish a fake BER. Not addressed here.
+- The oracle validates the generator only; it says nothing about RadioFry's ability to
+  demodulate AM-DSB.
+- `research_memory/CURRENT.md` is stale - it still lists the 8-class training run as
+  pending, which Entry 017 completed.
+
+### Recommended next step
+
+Wire a small AM-DSB capture set through the evaluation harness to exercise the Entry 019
+family fix end-to-end and confirm the harness marks BER unavailable rather than scoring
+dispatch's synthesised bits. That is a harness-side task and is the smallest way to
+validate the remaining half of the Entry 018 design before implementing AM-SSB.
+
+---
+
+## Entry 021 - 2026-09-09 - AM-DSB through the evaluation harness: analog safety validated
+
+End-to-end safety validation only. **No production analog demodulation was implemented**,
+and no claim is made about analog demodulation quality. AM-SSB and WBFM remain
+unimplemented. Frozen V1 is byte-identical (`d6d3f918687d0700a43e46211c3f04b9`,
+40 captures).
+
+### MEASURED - the actual harness path, which contradicts Entry 018
+
+Entry 018 predicted the first analog blocker would be
+`evaluation/metrics.py:expected_family_for("analog")`. **It is not.** Traced with a real
+AM-DSB capture:
+
+`evaluate_capture` calls `load_ground_truth` on **line 111**, which does
+`np.load(base / metadata["bits"]["source_bits_file"])`. An analog record has
+`bits: null`, so this raises **`TypeError: 'NoneType' object is not subscriptable`** and
+aborts *before* `expected_family_for` on line 123 is ever reached.
+
+The Entry 019 family fix is correct and necessary, but it was not the first thing an
+analog capture would hit. This is exactly why the path was traced rather than assumed.
+
+### Production changes - two, both required to prevent a crash or a fake metric
+
+**1. `synthetic_gen/v1/generator.py` (400 -> 405 lines), `load_ground_truth`.**
+Returns `source_bits`/`transmitted_bits` as `None` when the `bits` block is null,
+instead of subscripting `None`. Chosen over returning an empty array so callers must
+decide explicitly rather than silently scoring zero bits. Digital captures are
+unaffected - `QPSK_snr20dB_r000` still loads an 8192-element array.
+
+**2. `evaluation/harness.py` (327 -> 358 lines).** A `has_source_bits` flag threaded
+through `evaluate_capture` and `_score_report`:
+- `expected_bits` is `None` rather than `0` for a bit-less capture.
+- `_score_report(..., has_bits=False)` forces `score_bits(available=False,
+  reason="analog_no_transmitted_bits")`, so recovered bits are never compared.
+- `bit_count_ratio` is `None` rather than a ratio against a zero denominator.
+- New `UNAVAILABLE_METRICS["bit_error_rate_analog"]` documents why.
+
+No dispatch, fusion, demodulator, generator-waveform, CNN or V1 change.
+
+### MEASURED - observed harness record for an AM-DSB capture
+
+| Field | Value |
+|---|---|
+| `ingestion_ok` / `pipeline_ok` | True / True |
+| `expected_family` | **`analog-like`** |
+| `expected_cnn_label` | `AM-DSB` |
+| `classical_family` | `QAM-like` |
+| `cnn_label` / `cnn_confidence` | `PAM4` / 0.462 |
+| `fusion_label` | `PAM4` |
+| `demod_available` / `demod_scheme` | **False** / `None` |
+| `ber_status` / `ber_reason` | **`unavailable`** / **`analog_no_transmitted_bits`** |
+| `ber_strict` / `ber_aligned` | **None** / **None** |
+| `expected_bits` / `compared_bits` | **None** / **0** |
+| `es_n0_db` / `bits_per_symbol` | **None** / **None** |
+| `truth_symbol_rate_hz` | **None** |
+| `est_symbol_rate_hz` | 1806.6 |
+
+All seven required validations hold: analog family resolved, no crash, BER explicitly
+unavailable, no threshold-derived BER, Eb/N0 and Es/N0 null, no symbol-rate requirement,
+ground truth unmutated (byte-compared before and after).
+
+### An honest caveat about what this run did *not* exercise
+
+The shipped 11-class checkpoint labelled this AM-DSB capture **`PAM4`** at 0.462
+confidence, and `dispatch` has **no PAM4 route**, so demodulation never ran and the
+analog fake-bit branch was never reached in the end-to-end record above. The guard
+therefore passed without being exercised by that path.
+
+Rather than claim coverage it did not have, two further tests were added:
+- `test_dispatch_really_does_synthesise_analog_bits` confirms Entry 018 measured fact 3
+  still holds - `demodulate_capture(..., "AM-DSB", ...)` returns a non-empty bit array
+  built by thresholding the waveform at its median.
+- `test_the_guard_refuses_those_bits_even_when_they_are_present` calls `_score_report`
+  directly with `has_bits=False` and non-empty recovered bits, proving the guard returns
+  `unavailable` regardless.
+
+Two incidental observations, recorded but **not** acted on: parameter estimation still
+emits a meaningless `est_symbol_rate_hz` of 1806.6 Hz for an analog capture (harmless -
+there is no truth value to compare against, so no error is computed), and the classical
+detector called this capture `QAM-like` rather than `analog-like`.
+
+### Tests
+
+New `tests/test_analog_harness_safety.py`, **15 tests**: null-bits ground-truth loading,
+digital loading unchanged, no crash on IQ and WAV, analog family resolution, capture
+identity, BER unavailable, no fake BER, dispatch genuinely synthesising analog bits, the
+guard refusing them directly, the metric-registry entry, bit-derived fields staying null,
+no symbol-rate requirement, ground truth not mutated, and a digital capture still scoring
+a real BER of 0.0.
+
+- Focused: **15 passed**
+- Full suite: **461 passed** (up from 446), same single pre-existing `reedsolo` failure
+
+### Digital regression - verified
+
+| Check | Result |
+|---|---|
+| Frozen V1 aggregate .iq SHA-256 | `d6d3f918687d0700a43e46211c3f04b9` (40 captures) - unchanged |
+| Digital `MODULATIONS` | `['16QAM','64QAM','8PSK','BFSK','BPSK','GFSK','PAM4','QPSK']` - no analog |
+| Digital family mappings | psk->PSK-like, qam->QAM-like, fsk->FSK-like, pam->QAM-like - unchanged |
+| Digital BER behaviour | `QPSK_snr20dB_r000` still scores `ber_status="ok"`, `ber_strict=0.0` |
+| `symbol_rate_experiment` | still the six digital names |
+| Analog artifacts in repo | none - all tests use pytest `tmp_path` |
+
+### Remaining analog blockers
+
+1. The classical detector calls AM-DSB `QAM-like`, and the shipped checkpoint calls it
+   `PAM4`. Neither routes to an analog demodulator, so analog captures currently never
+   reach `demodulate_am` through the production path.
+2. Entry 018 measured fact 4 is untouched: `dispatch` still decimates by an estimated
+   symbol rate before the analog branch.
+3. Analog is still not wired into any dataset builder, manifest or training set.
+4. `AM-SSB` and `WBFM` remain unimplemented.
+
+### Known documentation issue
+
+`research_memory/CURRENT.md` is still stale - it describes the Entry 017 8-class training
+run as pending. Reported only; no memory-system cleanup was mixed into this task.
+
+### Recommended next step
+
+Implement AM-SSB generation plus its sideband-suppression oracle, following the same
+pattern as Entry 020. The harness safety path is now proven, so subsequent analog schemes
+inherit it without further harness work.
+
+---
+
+## Entry 022 - 2026-09-09 - AM-SSB synthetic generation and independent sideband oracle
+
+Signal generation only. **No production AM-SSB demodulation was implemented**, and the
+oracle below is evidence about the generator, not about RadioFry's demodulation quality.
+WBFM remains unimplemented. Frozen V1 is byte-identical
+(`d6d3f918687d0700a43e46211c3f04b9`, 40 captures).
+
+### Sideband convention - decided and documented
+
+**Upper sideband (USB) is the default.** `DEFAULT_SIDEBAND = "upper"`; LSB is available
+via `AnalogSampleSpec(scheme="am_ssb", sideband="lower")`. The choice is recorded in
+ground truth as `analog.sideband`, so a capture is never ambiguous.
+
+### Production change - one file
+
+`src/radiofry/synthetic_gen/v1/analog.py` (240 -> 293 lines):
+
+- `ANALOG_MODULATIONS` gains `"AM-SSB"` -> `ModulationSpec("AM-SSB", "analog", 0, 0, "AM-SSB")`.
+  Order and bits_per_symbol stay 0/null: an analog capture has neither.
+- `SUPPORTED_ANALOG_SCHEMES = ("am_dsb", "am_ssb")`, `SCHEME_TO_MODULATION`,
+  `SUPPORTED_SIDEBANDS = ("upper", "lower")`, `DEFAULT_SIDEBAND = "upper"`.
+- `AnalogSampleSpec.sideband: str | None = None` plus `_resolve_sideband()`, which
+  rejects a sideband on a non-SSB scheme and fills in the USB default for SSB. This keeps
+  the "each parameter is null for the scheme it does not apply to" rule from Entry 020.
+- `modulate_am_ssb()` - analytic signal via `scipy.signal.hilbert`, conjugated for LSB,
+  then shifted to the carrier offset. Suppressed carrier by construction: no `1 +` term.
+- `modulate_analog()` dispatcher; `modulation_name` / `modulation_spec` properties.
+- Ground truth generalised: `modulation.name` from the scheme, and the `analog` block now
+  carries `sideband` (SSB only), `modulation_depth` (DSB only) and
+  `carrier: "present" | "suppressed"`.
+
+The digital registry `config.MODULATIONS` was **not** touched, so the three call sites
+that default to `tuple(MODULATIONS)` still see eight digital classes only.
+
+### MEASURED - the independent oracle
+
+The oracle derives the expected spectrum analytically from the ground-truth tone list and
+computes an FFT of the emitted waveform. It never calls `modulate_am_ssb`.
+
+| Quantity (USB, noiseless) | Measured |
+|---|---|
+| Suppression of the image of the 304.0 Hz tone | **140.1 dB** |
+| Suppression of the image of the 2592.3 Hz tone | **171.1 dB** |
+| Suppression of the image of the 2904.3 Hz tone | **175.7 dB** |
+| Total energy above carrier vs below carrier | **72.6 dB** |
+| Requirement | >= 30 dB - met with large margin |
+
+Each wanted tone is present at its predicted bin; the carrier bin is suppressed; the
+occupied bandwidth is measurably narrower than AM-DSB for the same message. An
+independent product detector (down-convert, take the real part - no generator code)
+recovers the message with correlation **> 0.99** for both USB and LSB. Adding AWGN
+degrades that correlation monotonically, as it must.
+
+### Tests
+
+New `tests/test_synthetic_am_ssb.py`, **28 tests**: registry membership, WBFM absence,
+digital registry unchanged, sideband validation and defaulting, deterministic generation,
+USB != LSB, the five oracle assertions above, independent recovery for both sidebands,
+SNR degradation, ground-truth contract, message block + SHA-256, null bit-derived fields,
+reproducibility, harness pass-through, and an AM-DSB regression.
+
+**Three Entry 020 tests were deliberately updated**, because they asserted the previous
+state of the world rather than a physical property:
+`test_analog_registry_contains_only_am_dsb_for_now` (now
+`..._holds_the_implemented_analog_schemes`, expecting `["AM-DSB", "AM-SSB"]`),
+`test_am_ssb_and_wbfm_are_not_implemented` (now `test_wbfm_is_still_not_implemented`),
+and `test_unsupported_analog_scheme_is_rejected` (now uses `"wbfm"` as its unsupported
+scheme). The `test_synthetic_am_dsb.py` module docstring was corrected for the same
+reason. No assertion was loosened; no failing test was deleted.
+
+- Focused (both analog generation files): **59 passed**
+- Full suite: **489 passed, 1 failed** - the same pre-existing `reedsolo` gap
+
+### Regression - verified
+
+| Check | Result |
+|---|---|
+| Frozen V1 aggregate .iq SHA-256 | `d6d3f918687d0700a43e46211c3f04b9` (40 captures) - unchanged |
+| Digital `MODULATIONS` | `['16QAM','64QAM','8PSK','BFSK','BPSK','GFSK','PAM4','QPSK']` - 8, no analog |
+| Analog registry | `['AM-DSB','AM-SSB']` only |
+| Supported schemes | `('am_dsb','am_ssb')` |
+| `symbol_rate_experiment.MODULATIONS` | six digital names - unchanged |
+| WBFM implemented | **False** |
+| Analog artifacts in repo | none - tests use pytest `tmp_path` |
+
+### Scope boundaries observed
+
+`dispatch.py`, fusion thresholds, CNN architecture, checkpoints, training, PAM4/GFSK,
+the analog demodulators and `evaluation/harness.py` were **not** modified. No Git
+operation was performed.
+
+### What this entry does NOT establish
+
+AM-SSB captures still do not reach `demodulate_ssb` through the production path: the
+classical detector and the shipped checkpoint both label analog captures as digital
+classes (Entry 021), and `dispatch` still decimates by a meaningless estimated symbol
+rate. The >0.99 recovery figure comes from the test-local oracle detector, not from
+RadioFry.
+
+### Known documentation issue
+
+`research_memory/CURRENT.md` remains stale - it still lists the Entry 017 8-class
+training run as pending. Reported only; not modified, per task scope.
+
+---
+
+## Entry 023 - 2026-09-09 - Post-AM-SSB documentation and repository audit (no behaviour change)
+
+Housekeeping only. **No DSP, ML, generator or harness behaviour was changed.** Entries
+021 and 022 were audited against the actual repository; the memory system was brought
+back in line with reality.
+
+### Entries 021 and 022 - audited against the code
+
+Every file named in both entries exists at the stated size:
+`synthetic_gen/v1/analog.py` 293 lines, `evaluation/harness.py` 358 lines,
+`tests/test_synthetic_am_dsb.py`, `tests/test_synthetic_am_ssb.py`,
+`tests/test_analog_harness_safety.py`. The Entry 021 guard claims are present in the
+source (`has_source_bits`, `analog_no_transmitted_bits`, `UNAVAILABLE_METRICS
+["bit_error_rate_analog"]`). Re-measured test counts match what the entries recorded:
+**28** AM-SSB, **31** AM-DSB (59 together, as Entry 022 states), **15** analog harness
+safety. Registry state matches: digital 8 classes, analog `['AM-DSB','AM-SSB']`,
+`symbol_rate_experiment` still six digital names, WBFM absent. Nothing was fabricated,
+and no historical result was rewritten.
+
+### CORRECTION - the frozen V1 "SHA-256" is a truncated digest
+
+Entries 016, 017, 019, 020, 021 and 022 all quote
+`d6d3f918687d0700a43e46211c3f04b9` as the frozen V1 "aggregate .iq SHA-256". That is 32
+hex characters - MD5 length - which reads as a mislabel. It is not.
+
+Reproduced this audit: SHA-256 over the concatenated, name-sorted
+`data/synthetic_v1/captures/*.iq` bytes (40 files) is
+`d6d3f918687d0700a43e46211c3f04b9ef74be9d8b232eac5d0e4cf4bf2390ab`. The recorded value
+is the **first 32 characters** of that digest. (MD5 over the same bytes is
+`ff7b703a31b80fb3d1f9c0a320938e79` - a different value, so the short form was never an
+MD5.)
+
+The historical entries are therefore **correct but under-specified**, and are left as
+written. The full digest and the truncation rule are now recorded in
+`research_memory/CURRENT.md` so future checks cannot go wrong.
+
+### CORRECTION - what "489 passed" excludes
+
+Entry 022 reports a full suite of "489 passed, 1 failed". That run used
+`--ignore=tests/test_model_report.py`. Without the ignore, pytest **aborts during
+collection**: `test_model_report.py` imports `h5py`, which is not installed, and a
+collection error interrupts the whole session. So there are two environmental gaps, not
+one:
+
+- `test_decoding_correlation.py::test_reed_solomon_round_trip` - `reedsolo` missing (a
+  failure, already recorded).
+- `tests/test_model_report.py` - `h5py` missing (a **collection error**, not previously
+  recorded).
+
+Both pre-date this work. Neither is a regression.
+
+### Memory system - brought up to date
+
+- `research_memory/CURRENT.md` **rewritten.** It had been stale since Entry 016: it still
+  described the 8-class training run as pending, listed class balance as the blocker, and
+  said nothing about analog. It now states V1/V2/PAM4-GFSK/AM-DSB/AM-SSB status, the six
+  live blockers, the recommended direction, and the standing constraints. Kept short and
+  operational; history stays in BANK.md.
+- `research_memory/INDEX.md` **extended.** It indexed Entries 001-016 only. Added Entry
+  017 and a new **Analog** section covering Entries 018-022, plus this entry. Also records
+  the two facts a reader most needs up front: WBFM is unimplemented, and analog captures
+  do not reach an analog demodulator.
+
+### `ANTIGRAVITY_COMMIT.txt` - was materially wrong, rewritten
+
+The handoff file described a commit that has since happened. Measured against the working
+tree:
+
+| Claim in the file | Reality |
+|---|---|
+| `Branch: feature/synthetic-dataset-v1` | current branch is **`main`**; that branch was merged in `0d0d9d7` |
+| ~30 files listed as "commit these" | all but a handful are **already committed** |
+| "these paths are NOT matched by the current .gitignore" | `.gitignore` now has `/data/`, `/reports/`, `/models_saved/` - they **are** matched |
+| checkpoints listed as commit candidates | `models_saved/` is gitignored |
+| "Tests: 489 passed" | true only with `--ignore=tests/test_model_report.py` |
+
+It was rewritten to describe only the actual uncommitted delta (5 modified, 6 untracked)
+and no longer implies anything has been committed or pushed. It is still useful, so it was
+kept rather than deleted.
+
+### MEASURED - repository state (read-only `git status`)
+
+Modified, tracked: `ANTIGRAVITY_COMMIT.txt`, `BANK.md`, `OP.md`,
+`src/radiofry/evaluation/harness.py`, `src/radiofry/synthetic_gen/v1/generator.py`.
+Untracked: `src/radiofry/synthetic_gen/v1/analog.py`,
+`tests/test_analog_harness_safety.py`, `tests/test_synthetic_am_dsb.py`,
+`tests/test_synthetic_am_ssb.py`, plus `scratch.py` and `commit_msg.txt`.
+
+`data/`, `reports/` and `models_saved/` do not appear at all - `.gitignore` covers them.
+No generated artifact is staged or modified. `scratch.py` (a one-off script that parsed
+`ANTIGRAVITY_COMMIT.txt` to build a file list) and `commit_msg.txt` (a copy of the
+already-committed V1 message) are both spent; they were **left in place**, flagged rather
+than deleted, since deletion is the user's call.
+
+### Tests - unchanged by this entry
+
+- Analog focused: **74 passed** (28 AM-SSB + 31 AM-DSB + 15 harness safety)
+- Full suite: **489 passed, 1 failed** (`reedsolo`), with `test_model_report.py` ignored
+  (`h5py`)
+
+Identical to the Entry 022 numbers, as expected for a documentation-only change.
+
+---
+
+## Entry 024 - 2026-09-09 - WBFM synthetic generation and independent FM oracle
+
+Signal generation only. **No production WBFM demodulation, classification, fusion or
+routing was implemented or modified.** Frozen V1 is byte-identical
+(`d6d3f918687d0700a43e46211c3f04b9`, 40 captures). The analog registry is now complete:
+AM-DSB, AM-SSB, WBFM.
+
+### FM formulation - phase integral, not an FM-looking approximation
+
+The message `s(t)` is the existing deterministic multi-tone signal, peak-normalised to 1,
+so a configured peak deviation `df` is realised exactly:
+
+    f_i(t) = f_c + df * s(t)                     |f_i - f_c| <= df
+    phi(t) = 2*pi * integral_0^t f_i(u) du
+    x(t)   = exp(j * phi(t))                     constant unit envelope
+
+Sampled at Fs the integral is a cumulative sum with step 1/Fs:
+
+    phi[n] = (2*pi / Fs) * sum_{k<=n} (f_c + df * s[k])
+
+so `angle(x[n+1] * conj(x[n])) * Fs / (2*pi)` returns `f_i[n+1]` exactly. Amplitude is
+deliberately not modulated - FM carries information in phase alone.
+
+### Production change - one file
+
+`src/radiofry/synthetic_gen/v1/analog.py` (293 -> 367 lines):
+
+- `ANALOG_MODULATIONS["WBFM"]`, `SUPPORTED_ANALOG_SCHEMES = ("am_dsb","am_ssb","wbfm")`,
+  `DEFAULT_FREQUENCY_DEVIATION_HZ = 15_000.0`.
+- `AnalogSampleSpec.frequency_deviation_hz` + `_resolve_frequency_deviation()`, which
+  rejects the field on the AM schemes, rejects a non-positive value, and rejects a
+  configuration whose `|f_c| + df` would reach Nyquist and alias.
+- `modulate_wbfm()` and a `modulate_analog()` route.
+- Ground truth `analog` block gains `frequency_deviation_hz`, `modulation_index`,
+  `carson_bandwidth_hz`; `carrier` is now `"suppressed"` for SSB and `"present"`
+  otherwise (WBFM transmits a carrier, it just does not modulate its amplitude).
+
+Digital `config.MODULATIONS` untouched - still the eight digital classes.
+
+### Ground truth - analog semantics preserved
+
+`modulation.name = "WBFM"`, `family = "analog"`. `frequency_deviation_hz` and
+`modulation_index` live in the **analog** block, deliberately **not** in the existing
+`signal.fsk_deviation_hz` / `signal.fsk_modulation_index`, which stay null: those are
+digital-FSK descriptors and reusing them would be exactly the fake-digital-semantics trap
+this task forbids. `bits`, `symbol_rate_hz`, `samples_per_symbol`, `bits_per_symbol`,
+`order`, `es_n0_db`, `eb_n0_db` all remain null; FEC and interleaving stay `"none"`.
+`modulation_depth` (DSB) and `sideband` (SSB) are null for WBFM.
+
+`modulation_index` is the single-tone definition applied to the widest component,
+`beta = df / f_max`; it is recorded, not asserted to be the only valid definition for a
+multi-tone message.
+
+### MEASURED - the independent oracle
+
+The oracle recovers instantaneous frequency from the emitted samples' phase progression
+and rebuilds the expected message from the recorded **tone list**. It never calls
+`modulate_wbfm` and never reuses the generator's message array.
+
+**Instantaneous frequency / deviation** (Fs 200 kHz, f_c 20 kHz, df 15 kHz, N 32768):
+
+| Quantity | Measured |
+|---|---|
+| Mean instantaneous frequency | **19999.954 Hz** (carrier 20000.0) |
+| Peak `abs(f_i - f_c)` | **15000.000 Hz** (configured 15000.0) |
+| f_i range | 5000.0 - 34974.4 Hz |
+| RMS deviation | 6151.3 Hz |
+| Envelope | mean **1.00000000**, std 4.2e-08 |
+
+Deviation also tracks a changed configuration: `df = 5 kHz` measures 5000.0 Hz.
+
+**Message recovery** (noiseless, discriminator `s_hat = (f_i - f_c)/df`):
+correlation **1.000000**, NRMSE **8.7e-08** - i.e. at the complex64 storage limit.
+
+**Recovered tones:**
+
+| Expected | Recovered | Error |
+|---|---|---|
+| 499.95 Hz | 500.50 Hz | 0.55 Hz |
+| 1359.21 Hz | 1361.13 Hz | 1.92 Hz |
+| 2472.25 Hz | 2472.00 Hz | 0.25 Hz |
+
+**Spectrum.** beta = 15000/2472.2 = **6.07** (genuinely wideband). Carson's rule is a
+**theoretical approximation**, `2*(df + f_max) = 34944.5 Hz`; the **measured** 99%
+occupied bandwidth is **36926.3 Hz**, a ratio of **1.057**. The test asserts only the
+same order of magnitude (0.5x - 2x), not equality, because a finite deterministic
+multi-tone signal has no reason to match Carson exactly. For the same message, AM-DSB
+occupies 4950.0 Hz and AM-SSB 2063.0 Hz - WBFM is ~7.5x wider than DSB, as expected.
+
+**SNR sweep** - monotone degradation, no thresholds tuned to pass:
+
+| Target SNR | Realized | Recovery correlation |
+|---|---|---|
+| 40 dB | 40.02 | **0.998672** |
+| 30 dB | 30.02 | **0.986952** |
+| 20 dB | 20.02 | **0.888326** |
+| 10 dB | 10.02 | **0.511968** |
+| 5 dB | 5.02 | **0.282209** |
+| 0 dB | 0.02 | **0.116717** |
+| -5 dB | -4.98 | **0.048065** |
+
+Honest caveat: the oracle is a **bare** discriminator with no limiter and no
+post-detection filtering, so it falls off faster than a real FM receiver would. The
+sharp drop below ~20 dB is the FM threshold effect plus the absence of any de-emphasis or
+audio-band filter - a property of the oracle, not a defect in the generated waveform.
+
+### PIPELINE OBSERVATION - recorded as evidence, deliberately not patched
+
+A WBFM capture (8192 samples, 20 dB) through the **unmodified** harness:
+
+| Field | Value |
+|---|---|
+| `expected_family` / `expected_cnn_label` | `analog-like` / `WBFM` |
+| `classical_family` | **`analog-like`** - correct |
+| `cnn_label` / `cnn_confidence` | **`BPSK`** / 0.407 |
+| `fusion_label` | `BPSK` |
+| `demod_available` / `demod_scheme` | **True** / **`2PSK`** |
+| `ber_status` / `ber_reason` | `unavailable` / `analog_no_transmitted_bits` |
+| `ber_strict` / `expected_bits` / `compared_bits` | None / None / 0 |
+| `est_symbol_rate_hz` | 1367.2 (meaningless for analog) |
+
+Two things worth recording:
+
+1. **The classical detector gets WBFM right** (`analog-like`), unlike AM-DSB, which it
+   called `QAM-like` in Entry 021. Constant envelope evidently helps it. The CNN still
+   does not - it has no analog class - and fusion follows the CNN.
+2. **This is the first analog capture that actually reaches a demodulator.** Because
+   fusion said `BPSK`, dispatch ran the 2PSK demodulator and returned bits. The Entry 021
+   guard therefore held **end-to-end** for the first time: despite real recovered bits
+   being present, `ber_status` is `unavailable` and `compared_bits` is 0. Entry 021 could
+   only exercise this by calling `_score_report` directly, because AM-DSB was labelled
+   PAM4 and had no dispatch route.
+
+No classifier, fusion threshold, dispatch route or demodulator was changed to improve any
+of this. It belongs to a later integration task.
+
+### Tests
+
+New `tests/test_synthetic_wbfm.py`, **34 tests**: registry, digital-registry isolation,
+deviation defaulting/validation/aliasing, sideband rejection, constant envelope,
+determinism, measured peak deviation (two configurations), mean instantaneous frequency,
+non-constant frequency, independent message recovery, recovered tones, monotone SNR
+degradation, high-SNR usability, Carson-order bandwidth, wider-than-AM-DSB, ground-truth
+contract, FM parameters, AM-only fields null, digital fields null, message + SHA-256,
+byte reproducibility, IQ write/read integrity (deviation preserved through the int16
+round trip within 5%), WAV output, AM-DSB waveform regression, AM-SSB waveform
+regression, AM ground truth still nulling the FM fields, and the frozen V1 hash.
+
+**Five prior tests were deliberately updated** - all of them asserted "WBFM is not
+implemented", a statement about world state rather than a physical property:
+three in `test_synthetic_am_dsb.py` (registry contents; the WBFM-absence test, replaced
+with a constant-envelope distinction; and the unsupported-scheme test, which used
+`"wbfm"` as its negative case and now uses `"nbfm"`) and two in
+`test_synthetic_am_ssb.py` (registry contents; WBFM absence, replaced with a test that
+WBFM stays a distinct scheme and rejects `sideband`). Nothing was loosened or deleted.
+
+- Analog focused (4 files): **108 passed**
+- Full suite: **523 passed, 1 failed** - the pre-existing `reedsolo` gap, with
+  `tests/test_model_report.py` ignored (pre-existing missing `h5py`)
+
+### Regression - verified
+
+| Check | Result |
+|---|---|
+| Frozen V1 aggregate .iq SHA-256[:32] | `d6d3f918687d0700a43e46211c3f04b9` (40 captures) - unchanged |
+| Digital `MODULATIONS` | `['16QAM','64QAM','8PSK','BFSK','BPSK','GFSK','PAM4','QPSK']` - unchanged |
+| Analog registry / schemes | `['AM-DSB','AM-SSB','WBFM']` / `('am_dsb','am_ssb','wbfm')` |
+| `symbol_rate_experiment.MODULATIONS` | six digital names - unchanged |
+| AM-DSB waveform | asserted equal to `1 + 0.5*s(t)`, imag 0 |
+| AM-SSB waveform | asserted equal to `hilbert(s) * exp(j2*pi*fc*t)` |
+| PAM4 / GFSK / symbol-rate estimator / CNN / fusion / dispatch / FEC | not touched |
+| Analog artifacts in repo | none - tests use pytest `tmp_path` |
+
+### Remaining limitations
+
+1. WBFM captures are classified `BPSK` by the CNN and routed to the 2PSK demodulator.
+   The CNN has no analog class; that is the integration task, not this one.
+2. `dispatch` still decimates analog captures by a meaningless estimated symbol rate.
+3. Analog is still not wired into any dataset builder, manifest or training set.
+4. The oracle's discriminator has no limiter or post-detection filter, so its SNR curve
+   is pessimistic relative to a real FM receiver.
+5. Only WBFM is implemented - NBFM is not, and no analog schemes beyond these three are
+   planned in the current scope.
+
+---
+
+## Entry 025 - 2026-09-09 - Forensic investigation: where analog identity is lost (READ-ONLY)
+
+No production code, test, dataset or model was modified. `git status` was byte-identical
+before and after. Recorded here because Entry 026 depends on these measurements.
+
+### Two prior claims corrected against the current code
+
+1. **"The CNN has no analog class" is false for the default checkpoint.**
+   `models_saved/modulation_cnn.pt` carries 11 labels including `AM-DSB`, `AM-SSB`,
+   `WBFM`. Only the V2 checkpoints (`_v2_8class` 8 labels, `_v2_synth` 6) lack them, and
+   the harness uses the default when `model_path is None`.
+2. **"Analog never reaches an analog demodulator" is false.** AM-SSB is labelled `WBFM`
+   at 0.476 - above threshold - and routed to `demodulate_fm`. It reaches the *wrong*
+   analog demodulator, not none.
+
+### MEASURED - three analog traces (Fs 200 kHz, N 8192, 20 dB, seed 7, default checkpoint)
+
+| Field | AM-DSB | AM-SSB | WBFM |
+|---|---|---|---|
+| `classical_family` | QAM-like | QAM-like | **analog-like** |
+| `cnn_label` / conf | PAM4 / 0.394 | WBFM / 0.476 | BPSK / 0.267 |
+| CNN top-3 | PAM4 .394, AM-DSB .331, WBFM .180 | WBFM .476, AM-DSB .368, GFSK .080 | BPSK .267, AM-SSB .152, 8PSK .129 |
+| `fusion_label` | Unclassified | WBFM | Unclassified |
+| `demod_available` / scheme | False / None | True / WBFM | False / None |
+| `est_symbol_rate_hz` | 3857.4 | 2002.0 | 2929.7 |
+| `est_carrier_hz` (true) | 11.0 (0) | 22147.2 (20000) | 19957.6 (20000) |
+| `ber_status` | unavailable | unavailable | unavailable |
+
+Entry 024 recorded WBFM -> BPSK 0.407 -> 2PSK at seed 23; at seed 7 the same
+configuration gives 0.267 -> Unclassified. Both are real: **analog CNN confidence sits
+astride the 0.4 threshold**, so routing flips between rejection and a wrong demodulator
+depending on the capture. Any analog work must be validated across seeds.
+
+### Three distinct losses of analog identity
+
+**(a) `dsp/cyclostationary.py:44-51` - `analog-like` is a fallback, not a detection.**
+It is the bare `else` after three digital tests, at a hard-coded confidence of 0.45.
+Measured `amplitude_cv`: AM-DSB **0.2068** against the `amplitude_cv_qam = 0.2`
+threshold - it misses `analog-like` by **0.007**. AM-SSB 0.4609 -> QAM-like. WBFM 0.0698
+reaches `analog-like` only by elimination.
+
+**(b) `fusion/confidence_fusion.py` - the decisive transition.** `classical_family` feeds
+only `agrees`, which scales `trust_score`; the returned `label` is `ml_label` or
+`"Unclassified"` and is never derived from the classical family. So `analog-like` can
+drive trust down to 0.133 and set `review_recommended=True` while the label stays `BPSK`.
+Notably `_FAMILY_BY_LABEL` **already maps all three analog labels** - fusion was built
+expecting analog labels from the CNN. The gap is that a classical analog verdict has no
+path to an analog label when the CNN's top-1 disagrees.
+
+**(c) `dsp/preprocessing.py:17` - `iq -= np.mean(iq)` deletes the AM-DSB carrier.**
+For baseband DSB the DC mean *is* the carrier, measured at exactly `1.000000+0.000000j`:
+
+| carrier offset | amplitude_cv raw -> preprocessed | envelope recovery raw -> preprocessed |
+|---|---|---|
+| **0 Hz** | 0.2068 -> 0.6984 | 1.0000 -> **0.0004** |
+| 20 kHz | 0.2068 -> 0.2068 | 1.0000 -> 1.0000 |
+
+DSB-with-carrier is silently turned into DSB-suppressed-carrier. Offset-0 specific; the
+Entry 020/021 captures used offset 0.
+
+### MEASURED - dispatch decimates analog by a digital concept
+
+`dispatch.py:73-78` runs before the analog branch at line 86: a symbol rate is
+*required*, then the waveform is decimated by it with no anti-alias filter. AM-DSB, true
+tones 926.3 / 2688.3 / 2932.6 Hz:
+
+| sps | Fs' | Nyquist | tones above Nyquist | true tones fold to | measured peaks |
+|---|---|---|---|---|---|
+| 1 | 200 kHz | 100 kHz | 0/3 | 926.3, 2688.3, 2932.6 | 927.7, 2685.5, 2929.7 |
+| 52 | 3846 Hz | 1923 Hz | **2/3** | 926.3, 1157.8, 913.6 | 852.0, 925.0, 1168.5 |
+| 68 | 2941 Hz | 1471 Hz | **2/3** | 926.3, 252.8, 8.6 | 24.3, 243.1, 923.7 |
+| 100 | 2000 Hz | 1000 Hz | **2/3** | 926.3, 688.3, 932.6 | 682.9, 853.7, 926.8 |
+
+Measured peaks match the predicted fold positions, and only 82-158 of 8192 samples
+survive. A correctly-null analog symbol rate would *block* demodulation at line 73, so
+dispatch must learn to skip decimation for analog **before** estimation may return null.
+
+### MEASURED - analog demodulator interfaces
+
+| Function | Needs symbol rate? | Meaningful output | Limitation |
+|---|---|---|---|
+| `demodulate_am(samples)` | No | corr **1.0000** on raw DSB | envelope detector; **0.0004** once `preprocess` strips DC |
+| `demodulate_ssb(samples, fs, carrier)` | No (needs fs + carrier) | true carrier 20000 -> **1.0000** | estimated carrier 22147 -> **-0.0119**; `None` -> 0.0000 |
+| `demodulate_fm(samples)` | No | yes | bare discriminator; no limiter, de-emphasis or audio filter |
+
+Cross-checks: `demodulate_fm` on SSB -> 0.0002, `demodulate_am` on SSB -> -0.0003. Wrong
+analog routing yields noise.
+
+### Recommendation carried into Entry 026
+
+Smallest safe change: let a *rejected* digital CNN decision with `analog-like` classical
+evidence recover an analog label from the CNN's own ranked alternatives. Touches no
+digital path, no threshold, no dispatch.
+
+---
+
+## Entry 026 - 2026-09-09 - Analog-aware fusion fallback (minimal integration patch)
+
+Implements the Entry 025 recommendation. The global 0.4 threshold, the CNN, all
+checkpoints, dispatch, preprocessing, the BER guard and the analog generators are
+**unchanged**. Frozen V1 is byte-identical (`d6d3f918687d0700a43e46211c3f04b9`, 40
+captures).
+
+### Production changes - two files
+
+**1. `fusion/confidence_fusion.py`.** New `ANALOG_FAMILY`, `ANALOG_LABELS`
+(`{"AM-DSB","AM-SSB","WBFM"}`), `_recover_analog_alternative()`, a new optional keyword
+`ranked_alternatives: tuple[tuple[str, float], ...] = ()`, and one new
+`FusionResult.analog_fallback: bool = False` field (defaulted, so existing readers are
+unaffected). The legacy `alternatives` argument and every positional call are unchanged.
+
+The new path, and only this path:
+
+    if rejected and classical_family == "analog-like" and ml_label not in ANALOG_LABELS:
+        recover the highest-ranked analog label among ranked_alternatives
+
+Trust for a recovered label is `min(1.0, alternative_confidence * 1.1)` - the
+alternative's own softmax value with the existing agreement bonus, since it agrees with
+the classical family by construction. **No confidence is invented**, and the recovered
+trust is necessarily below the rejected primary's. `review_recommended` stays `True`.
+
+**2. `pipeline.py:73-76`.** Previously discarded CNN confidences
+(`tuple(label for label, _ in prediction.top_k[1:])`). Now builds `ranked` once and
+passes both `alternatives` (unchanged shape) and `ranked_alternatives`. No second
+inference pass.
+
+### Decision table - before -> after
+
+| Situation | Before | After |
+|---|---|---|
+| Digital CNN above threshold | label kept | **unchanged** |
+| Digital CNN above threshold + `analog-like` evidence | label kept, review=True | **unchanged** - a confident CNN is never overridden |
+| Digital CNN **below** threshold + `analog-like` + analog alternative | Unclassified | **recovered analog label**, `analog_fallback=True` |
+| Digital CNN below threshold + `analog-like` + no analog alternative | Unclassified | **unchanged** |
+| Digital CNN below threshold + digital evidence | Unclassified | **unchanged** - gated on the family, not on low confidence |
+| Analog CNN above threshold (right or wrong) | label kept | **unchanged** (see limitation below) |
+| Analog CNN below threshold | Unclassified | unchanged unless another analog label ranks below it |
+
+### MEASURED - multi-seed validation (5 seeds x 3 schemes, 20 dB, default checkpoint)
+
+| Case | Unclassified before -> after | analog label before -> after | analog demod reached | exactly correct |
+|---|---|---|---|---|
+| AM-DSB | 1/5 -> 1/5 | 0/5 -> 0/5 | 0/5 | 0/5 |
+| AM-SSB | 1/5 -> 1/5 | 4/5 -> 4/5 | 4/5 | 0/5 |
+| WBFM | 4/5 -> **3/5** | 0/5 -> **1/5** | **1/5** | 0/5 |
+
+**The fallback fires in 1 of 15 cases, and the one time it fires it picks the wrong
+analog label** (WBFM seed 7 -> `AM-SSB`, from the CNN's own top-2 at 0.152). This is
+reported as measured, not presented as a success.
+
+Why it fires so rarely - the gate state per capture:
+
+| Case | gate open | analog label present in top-k | blocker |
+|---|---|---|---|
+| AM-DSB, all 5 seeds | **No** | Yes (AM-DSB ranks 2nd, .107-.331) | `classical_family == "QAM-like"` |
+| AM-SSB, all 5 seeds | **No** | Yes (AM-DSB ranks 2nd, .273-.368) | `classical_family == "QAM-like"` |
+| WBFM seeds 3, 11, 17 | Yes | **No** | CNN top-3 is entirely digital |
+| WBFM seed 7 | Yes | Yes (AM-SSB .152) | fires - wrong label |
+| WBFM seed 23 | No (0.407 > 0.4) | Yes (WBFM .184) | above threshold, unchanged by design |
+
+So for AM-DSB and AM-SSB the remaining blocker is **not** fusion - the analog evidence is
+already in the CNN top-k in 10/10 cases, but the classical detector reports `QAM-like`
+and the gate never opens. That is Entry 025 finding (a), and fixing it means touching
+`cyclostationary.py`, which was explicitly out of scope here.
+
+A second structural limiter: `modulation_inference.predict_modulation` defaults to
+`top_k=3`, so fusion only ever sees **two** alternatives. Widening it would change
+`prediction.top_k` for every capture and every harness record, so it was not done here.
+
+### Digital regression - verified
+
+| Check | Result |
+|---|---|
+| Frozen V1 aggregate .iq SHA-256[:32] | `d6d3f918687d0700a43e46211c3f04b9` (40 captures) - unchanged |
+| Frozen V1: fallback gate open | **0 of 40** |
+| Frozen V1: fallback fired | **0 of 40** |
+| Frozen V1: fusion label changed | **0 of 40** |
+| `threshold` default | still `0.4` |
+| Existing fusion/QAM-routing/FSK-timing/QAM-scale tests | pass |
+
+### Tests
+
+New `tests/test_fusion_analog_fallback.py`, **19 tests** covering the required cases A-F
+plus API compatibility: accepted digital unchanged; accepted digital with analog evidence
+unchanged; the fallback itself; trust not fabricated and bounded by the rejected primary;
+review still recommended; no analog alternative -> rejection; no alternatives -> rejection;
+digital evidence -> untouched; the existing `test_dsp_fusion` rejection case preserved;
+accepted analog preserved; low-confidence analog primary not self-rescued; highest-ranked
+analog wins; rank order beats alphabetical; `ANALOG_LABELS` asserted against the actual
+dispatch source; a recovered label reaching `demodulate_am` for real; legacy
+`alternatives` still accepted; positional signature unchanged; threshold default pinned;
+and `pipeline` asserted to pass `ranked_alternatives`.
+
+- Focused (fusion + dispatch + analog + QAM/FSK regression, 9 files): **193 passed**
+- Full suite: **542 passed, 1 failed** - the pre-existing `reedsolo` gap, with
+  `tests/test_model_report.py` ignored (pre-existing missing `h5py`)
+
+### Analog cases still failing - stated plainly
+
+1. **AM-DSB and AM-SSB are not helped at all.** Blocked upstream by the classical
+   detector reporting `QAM-like` (AM-DSB misses the analog branch by 0.007 of
+   `amplitude_cv`).
+2. **The one firing case selects the wrong analog label.** WBFM -> AM-SSB.
+3. **Above-threshold wrong analog predictions are left unchanged**, as instructed:
+   AM-SSB is labelled `WBFM` at 0.416-0.476 in 4/5 seeds and routed to `demodulate_fm`.
+   The current architecture has no evidence that could distinguish a right analog label
+   from a wrong one at that confidence, and inventing a heuristic would have changed
+   unrelated behaviour.
+4. **Dispatch still decimates analog by an estimated symbol rate** (Entry 025 table);
+   not touched here.
+5. **`preprocess` still strips the baseband AM-DSB carrier**, so `demodulate_am` would
+   receive a carrier-less signal even when routed correctly.
+6. **`demodulate_ssb` still receives an inaccurate carrier** (22147 Hz vs 20000 Hz true),
+   which alone takes its recovery from 1.0000 to -0.0119.
+
+### Honest assessment
+
+The patch does exactly what it was scoped to do and provably breaks nothing: 0 of 40
+frozen V1 captures change. But it is **not** an analog integration on its own - measured
+end-to-end benefit is 1 firing in 15 analog captures, with the wrong label. The dominant
+blocker has moved upstream to `cyclostationary.py`, which is the natural next task.
+
+---
+
+## Entry 027 - 2026-09-09 - Positive family-level analog evidence in the classical detector
+
+Replaces `analog-like`-by-elimination with a measured positive test. No CNN,
+checkpoint, fusion threshold, dispatch, preprocessing, symbol-rate or generator change.
+Frozen V1 is byte-identical (`d6d3f918687d0700a43e46211c3f04b9`, 40 captures).
+
+### Original detector behaviour, reproduced
+
+`estimate_modulation_family` computes three features and tests them in order:
+
+    amplitude_cv      = std(|s|) / mean(|s|)
+    frequency_cv      = std(diff(unwrap(angle(s)))) / mean(|diff(unwrap(angle(s)))|)
+    fourth_power_line = |mean(exp(4j*phase))|
+
+    1. amplitude_cv < 0.15 and frequency_cv > 0.8   -> FSK-like
+    2. amplitude_cv < 0.2  and fourth_power > 0.2   -> PSK-like
+    3. amplitude_cv >= 0.2                          -> QAM-like
+    4. else                                         -> analog-like   (confidence 0.45, flat)
+
+Reproduced, not inherited (preprocessed, 20 dB, seed 7): AM-DSB@0 `amplitude_cv`
+**0.6019** -> QAM-like; AM-SSB **0.4609** -> QAM-like; WBFM **0.0698** with
+`frequency_cv` 0.349 -> falls to branch 4 by elimination. Entry 025 quoted AM-DSB at
+0.2068 - that is the **raw** waveform; after `preprocess` it is 0.60, so branch 3 fires
+even harder than previously recorded.
+
+### Diagnostic matrix - no single existing feature separates
+
+72 captures (4 analog configurations + 8 digital, 2 SNR, 3 seeds). Min/median/max:
+
+| Feature | ANALOG | DIGITAL | Separable |
+|---|---|---|---|
+| `amplitude_cv` | 0.0698 / 0.3752 / 0.6085 | 0.0709 / 0.2168 / 0.5121 | no |
+| **`frequency_cv`** | **0.175 / 0.572 / 1.436** | **1.107 / 1.688 / 2.907** | **nearly - overlap only from AM-DSB@0** |
+| `fourth_power_line` | 0.0006 / 0.0046 / 0.278 | 0.0011 / 0.282 / 0.961 | no |
+| envelope spectral flatness | 0.0167 / 0.240 / 0.554 | 0.117 / 0.537 / 0.574 | no |
+| IF spectral flatness | 0.059 / 0.416 / 0.575 | 0.244 / 0.557 / 0.605 | no |
+| IF low-band fraction | 0.0017 / 0.075 / 0.807 | 0.072 / 0.099 / 0.640 | no |
+| envelope low-band fraction | 0.103 / 0.635 / 0.975 | 0.082 / 0.218 / 0.662 | no |
+
+Three candidate features were built and rejected on measurement (envelope spectral
+peakiness, IF spectral flatness, low-band energy fraction) - each overlapped. Only
+`frequency_cv`, a feature the detector **already computes**, separates.
+
+**Why it is physical, not a fitted threshold.** `frequency_cv` measures how *impulsive*
+the instantaneous frequency is. A digital signal jumps at symbol boundaries and sits
+still between them, so phase increments are heavy-tailed and `std >> mean|.|`. An analog
+message moves the instantaneous frequency smoothly, so the two are comparable. It
+detects **symbol-transition structure**, which is exactly the digital/analog family
+distinction - and it names no modulation.
+
+Explicitly **not** done, per Entry 025: `amplitude_cv_qam` was not raised from 0.2, and
+"constant envelope = analog" was not assumed (WBFM, PSK and FSK are all constant
+envelope; the matrix shows `amplitude_cv` does not separate).
+
+### Threshold selection - measured, on a held-out set
+
+Tuning used seeds 3/7/11; validation used **held-out seeds 101/103/107/109(/113)**.
+Digital controls: 8 modulations x samples-per-symbol 4/8/16/32 x SNR 0/5/10/15/20 dB.
+
+**Lowest digital `frequency_cv` observed anywhere: 1.032** (BFSK, sps=4), stable across
+oversampling (1.03-1.28) and SNR. Threshold sweep:
+
+| T | analog detected | excl. AM-DSB@0 | digital false positives |
+|---|---|---|---|
+| 0.80 | 41.2% | 55.0% | **0 / 640** |
+| **0.90** | **47.5%** | **63.3%** | **0 / 640** |
+| 1.00 | 55.0% | 73.3% | 0 / 640 |
+| 1.05 | 55.0% | 73.3% | 4 / 640 (0.62%) |
+
+**0.9 chosen** over the higher-yield 1.00: it keeps ~13% margin below the lowest observed
+digital value, where 1.00 leaves only 3%. Conservative, as instructed.
+
+### Production change - one file, one branch
+
+`src/radiofry/dsp/cyclostationary.py`: new module constant `ANALOG_FREQUENCY_CV_MAX =
+0.9` (plus two confidence constants), and a new branch inserted **after** FSK and PSK and
+**before** QAM:
+
+    elif frequency_cv < ANALOG_FREQUENCY_CV_MAX and fourth_power_line < 0.2:
+        analog-like, confidence = 0.5 + 0.4 * (1 - frequency_cv / 0.9)
+
+Placement is deliberate: FSK and PSK keep absolute priority, so the new test can only
+take captures that would have been **QAM-like**, which is exactly the observed failure.
+The fourth-power veto reuses the existing `fourth_power_psk` constant - no second magic
+number - and blocks real-valued/carrier-bearing signals whose `frequency_cv` is ~0.
+
+Confidence is now evidence-based (0.5-0.9, scaling with margin) instead of a flat 0.45.
+
+The final `else` returns **`"unknown"`** (confidence 0.2) instead of `analog-like`, so
+analog is a positive verdict only. Measured impact: that branch fired **0 times in 900
+captures**, and it makes the Entry 026 fusion fallback strictly more conservative, never
+less.
+
+### MEASURED - validation, 5 held-out seeds
+
+Analog detection (new rule), by scheme and SNR:
+
+| Scheme | 20 dB | 15 dB | 10 dB | 5 dB | 0 dB |
+|---|---|---|---|---|---|
+| AM-DSB @ 0 Hz | 0/5 | 0/5 | 0/5 | 0/5 | 0/5 |
+| AM-DSB @ 20 kHz | **5/5** | **5/5** | **5/5** | 0/5 | 0/5 |
+| AM-SSB | **5/5** | **5/5** | **5/5** | 0/5 | 0/5 |
+| WBFM | **5/5** | **5/5** | **5/5** | 2/5 | 0/5 |
+
+Digital controls, 800 captures: **0 analog false positives (0.00%)**. Family transitions
+old -> new: QAM-like -> QAM-like 600, FSK-like -> FSK-like 199, PSK-like -> PSK-like 1.
+**Not one digital capture changed family.**
+
+Frozen V1, all 40 captures: QAM-like 28, FSK-like 12, **analog-like 0, unknown 0** - no
+family changed. Lowest `frequency_cv` on the real frozen dataset is **1.032**, matching
+the synthetic controls exactly.
+
+Below ~10 dB all analog schemes converge on `frequency_cv` ~1.16 as noise makes the phase
+impulsive, so low-SNR analog is not detectable by this feature. Stated, not hidden.
+
+### AM-DSB at carrier offset 0 - answered explicitly, not worked around
+
+`preprocess` removes DC, and for baseband AM-DSB the DC mean **is** the carrier
+(`1.000000+0.000000j`). Measured on the same capture:
+
+| | `amplitude_cv` | `frequency_cv` |
+|---|---|---|
+| raw waveform | 0.2036 | **0.0000** |
+| after `preprocess` | 0.6990 | **7.0457** |
+
+The carrier-bearing waveform has a perfectly static phase. Removing DC leaves a bipolar
+residual whose phase flips by pi at every message zero crossing, making it **more
+impulsive than any digital control measured** (worst digital: 2.91). **No family-level
+rule can recover analog identity from that**, and none was invented. Pinned by
+`test_baseband_am_dsb_is_documented_as_undetectable_after_preprocessing`. Fixing it means
+changing `preprocess`, which is out of scope and would alter every digital capture.
+
+### End-to-end interaction with the Entry 026 fusion fallback
+
+Traced classical -> CNN -> fusion -> dispatch, 5 held-out seeds at 20 dB, default
+11-class checkpoint:
+
+| Case | classical analog | fallback fired | analog label | analog demod reached | **label CORRECT** | unclassified |
+|---|---|---|---|---|---|---|
+| AM-DSB @ 0 Hz | 0/5 | 0/5 | 2/5 | 2/5 | **2/5** | 1/5 |
+| AM-DSB @ 20 kHz | **5/5** | **5/5** | **5/5** | **5/5** | **4/5** | 0/5 |
+| AM-SSB | **5/5** | 0/5 | 3/5 | 3/5 | **0/5** | 2/5 |
+| WBFM | **5/5** | 1/5 | 1/5 | 1/5 | **0/5** | 3/5 |
+
+- **AM-DSB @ 20 kHz is the real win.** Classical 0/5 -> 5/5, the Entry 026 fallback fires
+  5/5, and **4/5 are labelled `AM-DSB` and reach `demodulate_am`**. Entry 026 alone
+  achieved 0/5 here.
+- **AM-SSB is now recognised as analog 5/5 but still ends up wrong.** The CNN's top-1 is
+  `WBFM`; in 3/5 it is above threshold (accepted, routed to `demodulate_fm` - wrong
+  analog demodulator) and in 2/5 below threshold with no *other* analog alternative in
+  the top-3, so it stays Unclassified. The fallback never fires. The blocker has moved
+  from the detector to **CNN quality**.
+- **WBFM is unchanged** (it was already `analog-like`). 1/5 fallback fired and chose
+  `AM-SSB` - wrong.
+- **AM-DSB @ 0 Hz** is not helped by the detector, though the CNN independently produced
+  `AM-DSB` above threshold in 2/5.
+
+`analog-like` appearing is **not** claimed as success: the correct-label column above is
+the honest measure, and it is 6 of 20.
+
+### Tests
+
+New `tests/test_classical_analog_detection.py`, **40 tests**: threshold published and
+reusing the existing fourth-power constant; the three analog schemes detected at 20 dB;
+AM-SSB across 20/15/10 dB; evidence-based (non-constant) confidence bounded to 0.5-0.9;
+the evidence dict unchanged; **8 digital controls pinned to their exact current family**
+(including the pre-existing quirk that high-SNR PSK reads FSK-like); 14 parametrised
+"never analog" control cases at 20 and 10 dB; oversampling 4/16/32 not making digital
+look analog; FSK priority preserved; a strong fourth-power line vetoing the analog
+verdict; `analog-like` no longer in the final `else`; short input still `unknown`; the
+API contract; and the baseband AM-DSB limitation.
+
+- Focused detector: **40 passed**
+- Full suite: **582 passed, 1 failed** - the pre-existing `reedsolo` gap, with
+  `tests/test_model_report.py` ignored (pre-existing missing `h5py`)
+
+### Remaining blockers, separated by layer
+
+**Detector (this layer, remaining):** analog below ~10 dB is indistinguishable by this
+feature; baseband AM-DSB is unrecoverable after preprocessing.
+
+**Preprocessing:** `preprocessing.py:17` DC removal destroys the AM-DSB@0 carrier. Not
+touched - it would change every digital capture and invalidate the Entry 017 baseline.
+
+**CNN:** now the dominant analog blocker. AM-SSB is confidently mislabelled `WBFM`
+(0.32-0.49); WBFM's own label rarely ranks first. No retraining was done.
+
+**Fusion:** an above-threshold *wrong* analog label is still accepted (Entry 026
+limitation, unchanged).
+
+**Dispatch:** analog is still decimated by an estimated symbol rate, and a null analog
+symbol rate would block demodulation at `dispatch.py:73`.
+
+**SSB carrier estimation:** 22147 Hz vs 20000 Hz true takes `demodulate_ssb` from 1.0000
+to -0.0119.
+
+**Demodulator quality:** no audio filtering, no FM limiter or de-emphasis.
+
+---
+
+## Entry 028 - 2026-09-09 - Analog dispatch bypasses the digital symbol-rate path
+
+Dispatch only. No CNN, checkpoint, fusion threshold, classical detection, preprocessing,
+symbol-rate estimation, generator, BER-guard, FSK-timing or FEC change. Frozen V1 is
+byte-identical (`d6d3f918687d0700a43e46211c3f04b9`, 40 captures).
+
+### The failure, traced in the current code
+
+`demodulate_capture` before this entry:
+
+| Line | What it did |
+|---|---|
+| 71-72 | skip `Unclassified` / `unknown` / `""` |
+| **73-74** | **`if parameters.symbol_rate_hz is None ... return unavailable`** - a correctly-null analog symbol rate was rejected here |
+| **75** | `samples_per_symbol = round(sample_rate / symbol_rate_hz)` |
+| **76-77** | digital timing-offset search (`_linear_timing_offset`) |
+| **78** | **`symbol_samples = signal.iq[timing_offset::samples_per_symbol]`** - decimation |
+| 86-94 | analog branch, reached only *after* all of the above |
+
+So analog demodulators received a decimated, timing-shifted signal, and
+`demodulate_ssb` was additionally handed `sample_rate / samples_per_symbol` as its
+down-conversion rate.
+
+### Production change - one file, one helper
+
+`src/radiofry/decoding/demodulators/dispatch.py`:
+
+- New module constant `ANALOG_LABELS = frozenset({"AM-DSB", "AM-SSB", "WBFM"})`,
+  confirmed from the code and asserted equal to `fusion.ANALOG_LABELS` by test.
+- New `_demodulate_analog(signal, modulation, parameters)`: full-rate, no
+  samples-per-symbol, no timing search, no decimation. `demodulate_ssb` now receives
+  `signal.sample_rate` itself.
+- `demodulate_capture` gains one line, placed **before** the symbol-rate requirement:
+
+      if modulation in ANALOG_LABELS:
+          return _demodulate_analog(signal, modulation, parameters)
+
+- The dead analog branch was removed from the digital `try` block. **Every remaining
+  digital line is unchanged**, including the symbol-rate requirement, both timing-offset
+  heuristics and the `samples per symbol ... offset` message.
+- Analog still emits median-threshold bits so the Entry 021 BER guard keeps refusing
+  them; analog reporting behaviour is unchanged.
+
+Symbol rate is now optional **for the analog branch only**. `AM-SSB` still requires a
+sample rate (its product detector needs one) and says so explicitly.
+
+### MEASURED - before vs after
+
+Fs 200 kHz, N 8192, noiseless, seed 101, using each scheme's own estimated symbol rate:
+
+| Case | est. Rs | sps | BEFORE samples | AFTER samples | BEFORE corr | AFTER corr |
+|---|---|---|---|---|---|---|
+| AM-DSB | 3857 Hz | 52 | 157 | **8192** | 1.0000* | 1.0000 |
+| AM-SSB | 2002 Hz | 100 | 82 | **8192** | 1.0000* | 1.0000 |
+| WBFM | 2930 Hz | 68 | 120 | **8191** | **0.1454** | **1.0000** |
+
+*An honest caveat about the AM "before" column:* those 1.0000 values are correlations
+against the **decimated** message `msg[offset::sps]`, and envelope detection commutes
+with decimation, so the metric is trivially satisfied and **misleading**. It is shown to
+make that explicit, not as evidence the old path was fine. FM discrimination does *not*
+commute with decimation, which is why WBFM exposes the damage directly: **0.1454 ->
+1.0000**.
+
+The real damage for AM is aliasing. Recovered AM-DSB tone content:
+
+| | tone 1 | tone 2 | tone 3 |
+|---|---|---|---|
+| true message | 753.4 Hz | 2326.3 Hz | 2835.6 Hz |
+| **BEFORE** (sps=52, Fs'=3846 Hz) | 759.4 | **1004.4** | **1518.9** |
+| **AFTER** (full rate) | 756.8 | **2319.3** | **2832.0** |
+
+Two of three tones folded before; all three are correct now.
+
+### MEASURED - AM-SSB: dispatch corruption separated from carrier error
+
+At full rate, with dispatch fixed:
+
+| Carrier passed to `demodulate_ssb` | Recovery correlation |
+|---|---|
+| true 20000.0 Hz | **+1.0000** |
+| currently estimated 22147.2 Hz | **+0.0115** |
+
+Dispatch is no longer the problem for SSB; **carrier estimation is**, and it is not
+solved here. Pinned by `test_am_ssb_still_fails_with_the_currently_estimated_carrier`
+so the two can never be conflated again.
+
+### MEASURED - end to end (classical -> CNN -> fusion -> dispatch -> demod), 20 dB
+
+| Case | seed | classical | fusion | demod | est Rs | **Rs used?** | message corr | label |
+|---|---|---|---|---|---|---|---|---|
+| AM-DSB@0 | 103 | QAM-like | AM-DSB | AM-DSB | 977 | **no** | 0.0000 | correct |
+| AM-DSB@0 | 107 | QAM-like | AM-DSB | AM-DSB | 244 | **no** | 0.0084 | correct |
+| **AM-DSB@20k** | 103 | analog-like | AM-DSB | AM-DSB | 2173 | **no** | **0.9414** | **correct** |
+| **AM-DSB@20k** | 107 | analog-like | AM-DSB | AM-DSB | 1050 | **no** | **0.9431** | **correct** |
+| AM-DSB@20k | 101 | analog-like | WBFM | WBFM | 757 | no | -0.0000 | wrong |
+| AM-SSB | 101/103 | analog-like | WBFM | WBFM | 513/2466 | no | ~0.000 | wrong |
+| WBFM | 107 | analog-like | AM-SSB | AM-SSB | 1050 | no | -0.0015 | wrong |
+| WBFM | 101/103 | analog-like | Unclassified | - | 757/14526 | - | - | - |
+
+**The symbol rate was used in zero analog cases**, including estimates as absurd as
+244 Hz and 14526 Hz - the point of this entry.
+
+**AM-DSB at a non-zero carrier offset now recovers its message end to end through
+production at 0.94 correlation** where the pre-Entry-025 path could not. AM-DSB@0 is
+labelled correctly but recovers ~0.00 because `preprocess` already removed its carrier -
+a preprocessing limitation, not a dispatch one. Every ~0.00 row with a *wrong* analog
+label is the wrong demodulator running, which is a CNN problem.
+
+Correct labels remain **4 of 12**: this entry fixed dispatch, not classification, and no
+classification success is claimed.
+
+Harness record for a WBFM capture: `ber_status="unavailable"`,
+`ber_reason="analog_no_transmitted_bits"`, `ber_strict=None`, `compared_bits=0` - the
+Entry 021 guard is intact.
+
+### Tests
+
+New `tests/test_analog_dispatch_bypass.py`, **32 tests**: the published analog label set
+and its agreement with fusion's; all three schemes demodulating with
+`symbol_rate_hz=None`; **six digital labels still failing on a null symbol rate**;
+analog output byte-identical across symbol rates of None / 137 Hz / 91 kHz; analog
+demodulators receiving >= N-1 samples; the dispatch message no longer mentioning samples
+per symbol; AM-DSB, AM-SSB and WBFM recovery > 0.99; SSB failing with the estimated
+carrier; SSB using the full rate; PSK/QAM/FSK dispatch unchanged and still reporting the
+timing search; digital still requiring a sample rate; `Unclassified` still skipped;
+unknown labels still rejected; `DispatchResult` semantics; and analog still emitting the
+threshold bits the BER guard refuses.
+
+**Two prior tests were deliberately updated** - both asserted the behaviour this entry
+removes:
+- `test_decoding_correlation.py::test_dispatch_routes_ssb_and_reports_timing_search` ->
+  `..._at_the_full_capture_rate`. It required `"coarse timing search"` in the message and
+  compared against a **decimated** reference `audio[offset::8]`. It now asserts no
+  decimation (`symbols.size == audio.size`) and compares against the **full-rate**
+  message - a strictly stronger assertion, still at > 0.99.
+- `test_fusion_analog_fallback.py::test_the_analog_label_set_matches_the_dispatch_routes`
+  scraped `demodulate_capture`'s source for label literals; it now compares the two
+  `ANALOG_LABELS` sets directly.
+
+- Focused dispatch: **32 passed**
+- Full suite: **614 passed, 1 failed** - the pre-existing `reedsolo` gap, with
+  `tests/test_model_report.py` ignored (pre-existing missing `h5py`)
+
+### Remaining blockers, by layer - none of them dispatch
+
+**Preprocessing:** `preprocessing.py:17` DC removal still destroys the baseband AM-DSB
+carrier, so AM-DSB@0 recovers ~0.00 even when labelled and routed correctly.
+
+**CNN classification - dominant:** AM-SSB is confidently mislabelled `WBFM`; WBFM is
+labelled `AM-SSB` or a digital class. Wrong analog labels now reach the wrong analog
+demodulator cleanly, which is a routing-quality problem, not a dispatch one.
+
+**SSB carrier estimation:** 22147 Hz vs 20000 Hz true, measured above as +1.0000 ->
++0.0115.
+
+**Demodulator quality:** no audio filtering, no FM limiter, no de-emphasis.
+
+**NBFM:** not implemented.
+
+---
+
+## Entry 029 - 2026-09-09 - AM-SSB carrier estimation: no safe blind fix (NEGATIVE RESULT)
+
+**No production code was changed.** The investigation established that the carrier
+estimator is not the fixable part of this problem: blind SSB carrier recovery needs
+~1 Hz accuracy, and the best signal-only candidate reaches ~500 Hz noiseless and
+collapses entirely under noise. Forcing a change would have been metric theatre.
+Frozen V1 byte-identical (`d6d3f918687d0700a43e46211c3f04b9`, 40 captures); full suite
+unchanged at 614 passed.
+
+### 1. Failure reproduced against current code
+
+AM-SSB USB, Fs 200 kHz, N 8192, true carrier 20000.0 Hz, seed 101, noiseless:
+
+| | Value |
+|---|---|
+| estimated carrier | **21859.5 Hz** (error **+1859.5 Hz**) |
+| method | `welch_psd_centroid+nth_power` |
+| recovery with **true** carrier | **+1.0000** |
+| recovery with **estimated** carrier | **+0.0066** |
+
+(Entry 028 quoted 22147 Hz for seed 7; the offset is message-dependent, see below.)
+
+### 2. Cause - identified exactly, not guessed
+
+`parameter_estimation.py:119` computes the **PSD centroid** over the occupied band:
+
+    centroid = sum(f * P(f)) / sum(P(f))
+
+Line 121 returns that as `carrier_frequency_hz` whenever no hardware
+`center_frequency_hz` metadata is present. The centroid equals the carrier **only for a
+spectrum that is symmetric about it**. Every digital modulation and AM-DSB are
+double-sideband and therefore symmetric; **AM-SSB is one-sided by construction**, so the
+centroid lands at carrier + the message's own power-weighted centroid:
+
+| | Hz |
+|---|---|
+| message tones | 753.4, 2326.3, 2835.6 |
+| power-weighted tone mean | **1859.8** |
+| carrier + that | **21859.8** |
+| actual estimate | **21859.5** |
+
+A match to 0.3 Hz. The estimator has no notion of modulation family or sideband, and
+implicitly assumes a symmetric, carrier-centred spectrum.
+
+### 3. Signal evidence - the carrier is genuinely not in the spectrum
+
+Measured from the emitted USB waveform (Welch, nperseg 1024, the estimator's own view):
+
+| Quantity | Value |
+|---|---|
+| 99% occupied band | 20507.8 .. 23046.9 Hz |
+| true carrier vs low edge | 20000.0 vs 20507.8 (**-507.8 Hz**) |
+| strongest bins | 20703, 20898, 22266, 22461, 22656, 22852 Hz |
+| power above vs below true carrier | **23984 : 1** |
+
+There is no spectral line at 20000 Hz - the carrier is suppressed, as the generator
+intends. For LSB the mirror holds: band 16992.2..19531.2 Hz, carrier at the **upper**
+edge (+468.8 Hz).
+
+### 4. MEASURED - how much carrier error SSB can tolerate
+
+This is the number that decides the task. USB, noiseless:
+
+| carrier error | 0 | 1 | 2 | 5 | 10 | 20 | 50 | 500 | 1860 Hz |
+|---|---|---|---|---|---|---|---|---|---|
+| recovery corr | 1.0000 | 0.9891 | 0.9568 | 0.7478 | 0.2128 | -0.1822 | 0.0156 | 0.1887 | 0.0054 |
+
+**Usable SSB demodulation requires the carrier to ~1-2 Hz** - 0.01% of the carrier. A
+product detector translates the whole message by the error, so there is no graceful
+degradation.
+
+### 5. Candidate estimators - all tested, all rejected on measurement
+
+| Candidate | Measured behaviour | Verdict |
+|---|---|---|
+| **PSD centroid** (current) | biased by exactly the message centroid: +1859 / +1367 / +1139 Hz across seeds | rejected - provably wrong for one-sided spectra |
+| **Occupied-band edge** | noiseless +507.8 / +507.8 / +898.4 Hz (USB); **-16094 Hz at 20 dB, -108477 Hz at 10 dB** as the 99% band swallows noise | **rejected - worse than the centroid under noise** |
+| **Finer FFT resolution** | 195 Hz bin -> +507.8; 48.8 Hz -> +703.1; 24.4 Hz -> +727.5 | rejected - resolution makes it *worse*, it resolves the first tone more sharply |
+| **Spectral skew for sideband** | USB: -0.29, +0.30, +0.28; LSB: +0.29, -0.30, -0.24 - sign inconsistent across seeds | rejected - not a discriminator |
+| **Sideband symmetry / peak-pair geometry** | SSB has no symmetric partner and no pilot | not applicable |
+| **Assume a fixed message low-cutoff** | would encode our own generator's 300 Hz tone band into production | **rejected as disguised ground-truth leakage** |
+
+### 6. Why no blind estimator can work - the physical argument
+
+The carrier sits below the lowest message tone and **carries no power itself**. That gap
+is a property of the message, not the signal format, and it varies per capture:
+
+| seed | 101 | 103 | 107 | 109 |
+|---|---|---|---|---|
+| lowest tone (= unknowable gap) | 753.4 | 681.1 | 1052.5 | 536.5 Hz |
+
+To hit 1 Hz an estimator would have to know that gap to 1 Hz, from a signal that contains
+no information about it. **The requirement is ~500x tighter than the best achievable
+blind estimate, and the gap is not a resolution problem.** This is the well-known reason
+real SSB receivers require manual tuning or a transmitted pilot.
+
+### 7. The legitimate path already exists and already works
+
+`parameter_estimation.py:120-121` already prefers
+`signal.metadata["center_frequency_hz"]` (or `carrier_frequency_hz`) over the centroid,
+and `preprocess` preserves metadata. Verified end to end:
+
+| | Value |
+|---|---|
+| estimated carrier | **20000.0 Hz** (error **0.0**) |
+| method | `hardware_center_frequency+welch_nth_power` |
+| SSB recovery | **1.0000** |
+
+For a real SDR capture the tuner's centre frequency is legitimate hardware information,
+not ground truth, and it is the correct source. **No code change is needed to use it** -
+the ingestion path simply has to populate that metadata. Making the *synthetic* generator
+write it would be ground-truth leakage into production and was not done.
+
+### 8. Why no production change was made
+
+The centroid is provably wrong for one-sided spectra, so a change was considered. It was
+rejected because:
+
+1. The only signal-only alternative (band edge) is ~500 Hz noiseless - still ~500x short
+   of usable - and **catastrophically worse under noise** (-16 kHz at 20 dB).
+2. It would therefore improve a reported number while leaving SSB demodulation exactly as
+   broken, which is the metric gaming this project has avoided throughout.
+3. `estimate_parameters` is shared infrastructure. The current digital carrier estimates
+   sit at -19.7 to +123.3 Hz around a true 0 Hz (BPSK -19.7, QPSK -167.5, 8PSK +32.7,
+   16QAM +123.3, 64QAM -44.4, BFSK +106.4, GFSK +113.5). Risking those for no functional
+   gain is not justified.
+
+### 9. Digital baseline recorded for whoever picks this up
+
+Current estimator, 20 dB, seed 101, true carrier 0 Hz: BPSK **-19.7**, QPSK **-167.5**,
+8PSK **+32.7**, 16QAM **+123.3**, 64QAM **-44.4**, BFSK **+106.4**, GFSK **+113.5** Hz.
+Any future change must be measured against these.
+
+### 10. Recommended next step
+
+Populate `metadata["center_frequency_hz"]` from real capture headers in the ingestion
+layer (SigMF, WAV chunk, SDR sidecar). That makes SSB work for real captures without a
+single line of estimator change. For synthetic evaluation, accept that blind SSB carrier
+recovery is out of reach and score SSB on the demodulator given a supplied carrier.
+
+### Repository state
+
+Read-only investigation. `git status` and `git diff --stat` are identical to the
+pre-investigation state; full suite **614 passed, 1 failed** (pre-existing `reedsolo`,
+with `test_model_report.py` ignored for the pre-existing missing `h5py`).
+
+### Remaining blockers - unchanged by this entry
+
+**Preprocessing:** DC removal still destroys the baseband AM-DSB carrier (AM-DSB@0
+recovers ~0.00 even when routed correctly).
+**CNN classification - dominant:** AM-SSB is confidently mislabelled `WBFM`, so most SSB
+captures never reach `demodulate_ssb` regardless of carrier accuracy.
+**Demodulator quality:** no audio filtering, FM limiter or de-emphasis.
+**NBFM:** not implemented.
+
+---
+
+## Entry 030 - 2026-09-09 - SigMF sidecar centre-frequency ingestion (closes the Entry 029 gap)
+
+Ingestion only. No estimator, demodulator, CNN, fusion, dispatch, preprocessing,
+generator, FSK-timing or detector change. Frozen V1 byte-identical
+(`d6d3f918687d0700a43e46211c3f04b9`, 40 captures).
+
+### Current metadata flow, traced
+
+| Stage | File / function | Metadata it sets | Carrier present? |
+|---|---|---|---|
+| IQ read | `ingestion/iq_parser.py:read_iq` | `dtype`, `byte_order`, `path` | **no** |
+| WAV read | `ingestion/wav_parser.py:read_wav` | `channel_mode`, `path` | **no** |
+| Container | `contracts.py:UnifiedSignalContainer` | free-form `metadata: dict` | n/a |
+| Preprocess | `dsp/preprocessing.py:35-36` | copies the dict, adds `preprocessed` | **preserved** |
+| Estimate | `dsp/parameter_estimation.py:120-121` | **reads** `center_frequency_hz`, else `carrier_frequency_hz` | **consumed** |
+
+So the consumer existed and the preservation path existed; **no parser ever populated
+the field**. That was the entire gap. No header, chunk or sidecar parsing existed
+anywhere - `grep -rni sigmf` over the source tree returned nothing.
+
+### Format survey - what is legitimately available
+
+- **Headerless IQ**: by definition carries no tuner frequency. A sidecar is the only route.
+- **WAV**: the standard header has **no** RF tuning field. (SDR recorders such as SDR#
+  write a non-standard `auxi` chunk, but `scipy.io.wavfile` does not expose chunks and
+  parsing them was judged disproportionate here.) A sidecar is the reliable route, and
+  this entry does not pretend otherwise.
+- **SigMF**: the one widely-used standard that fits, needs only `json` from the standard
+  library, and stores exactly what is needed.
+
+**Option A was chosen.** Options B (a generic metadata interface) and C (no change) were
+rejected: B is speculative architecture with no second consumer today, and C would leave
+a working `estimate_parameters` branch permanently unreachable for real captures.
+
+### Production change - one new file, two three-line parser hooks
+
+**New `src/radiofry/ingestion/sidecar.py` (76 lines).** Deliberately **not** a SigMF
+implementation - it reads two values and ignores the rest of the standard:
+
+- `SIGMF_FREQUENCY_KEY = "core:frequency"` from the first entry of `captures`
+- `SIGMF_SAMPLE_RATE_KEY = "core:sample_rate"` from `global`
+- `sidecar_path_for()`: `cap.iq` / `cap.sigmf-data` -> `cap.sigmf-meta`
+- `read_sigmf_sidecar()` returns `{}` on a missing, unreadable, non-JSON, non-object or
+  `captures`-less file. **A missing value is never replaced by a default.**
+- `_finite_non_negative()` rejects non-numeric values, `bool` (an `int` subclass that is
+  never a frequency), NaN, infinity, negatives and anything above 1e15 Hz. **0.0 is
+  accepted** - baseband is legitimate.
+
+**`iq_parser.read_iq`**: consults the sidecar; sets `center_frequency_hz` and
+`center_frequency_source="sigmf_sidecar"` only when a valid value is present, and adopts
+the sidecar sample rate **only** when the caller supplied none.
+
+**`wav_parser.read_wav`**: same, except the WAV's own header sample rate stays
+authoritative and is never overridden.
+
+Both leave their existing metadata keys untouched, so a capture without a sidecar
+produces byte-identical behaviour to before.
+
+### Anti-leakage - enforced, not just intended
+
+The synthetic generator writes `.iq`, `.wav`, `.json` and `.message.npy`. It does **not**
+write `.sigmf-meta`, and production ingestion never reads the generator's ground-truth
+JSON. Three tests enforce this:
+
+- `test_the_synthetic_generator_does_not_write_a_sigmf_sidecar` - asserts
+  `list(tmp_path.glob("*.sigmf-meta")) == []` after generation.
+- `test_ingestion_ignores_the_generators_ground_truth_json` - confirms `c.json` holds the
+  true carrier and that `read_iq` still exposes no `center_frequency_hz`.
+- `test_the_sidecar_reader_never_looks_at_a_plain_json_file` - a `cap.json` containing
+  `core:frequency` is ignored; only `cap.sigmf-meta` is read.
+
+Every sidecar in the test suite is written by the test itself, representing what a real
+recorder emits. Where the true carrier appears it is an **independent expected value**,
+never a production input.
+
+### MEASURED - SSB end to end (ingestion -> preprocess -> estimator -> demodulator)
+
+| Sideband | seed | SNR | sidecar | estimated carrier | error | method | recovery |
+|---|---|---|---|---|---|---|---|
+| USB | 101 | - | no | 21859.5 | +1859.5 | centroid | +0.0066 |
+| USB | 101 | - | **yes** | **20000.0** | **+0.0** | hardware | **+1.0000** |
+| USB | 101 | 20 dB | no | 21849.8 | +1849.8 | centroid | -0.0061 |
+| USB | 101 | 20 dB | **yes** | **20000.0** | **+0.0** | hardware | **+0.9951** |
+| USB | 103 | - | no | 21367.5 | +1367.5 | centroid | -0.0955 |
+| USB | 103 | - | **yes** | **20000.0** | **+0.0** | hardware | **+1.0000** |
+| USB | 103 | 20 dB | **yes** | **20000.0** | **+0.0** | hardware | **+0.9948** |
+| LSB | 101 | - | no | 18140.6 | -1859.4 | centroid | +0.0068 |
+| LSB | 101 | - | **yes** | **20000.0** | **+0.0** | hardware | **+1.0000** |
+| LSB | 101 | 20 dB | **yes** | **20000.0** | **+0.0** | hardware | **+0.9951** |
+| LSB | 103 | - | **yes** | **20000.0** | **+0.0** | hardware | **+1.0000** |
+| LSB | 103 | 20 dB | **yes** | **20000.0** | **+0.0** | hardware | **+0.9948** |
+
+**Carrier error 0.0 Hz and recovery 0.9948-1.0000 in all eight sidecar cases**, USB and
+LSB alike. Without a sidecar the error stays at 1353-1860 Hz and recovery at -0.20..+0.14:
+**Entry 029's negative result is unchanged and is pinned by a test**
+(`test_ssb_recovery_still_fails_without_the_sidecar`). This entry did not make blind
+estimation work - it supplied the information blind estimation cannot obtain.
+
+### Digital regression - identical to the Entry 029 baseline
+
+True carrier 0 Hz, 20 dB, seed 101:
+
+| | BPSK | QPSK | 8PSK | 16QAM | 64QAM | BFSK | GFSK |
+|---|---|---|---|---|---|---|---|
+| Entry 029 baseline | -19.7 | -167.5 | +32.7 | +123.3 | -44.4 | +106.4 | +113.5 |
+| now | -19.7 | -167.5 | +32.7 | +123.3 | -44.4 | +106.4 | +113.5 |
+| delta (Hz) | -0.05 | -0.01 | +0.01 | +0.03 | +0.04 | +0.05 | +0.02 |
+
+All within floating-point noise. Frozen V1 has no sidecars, so it still takes the
+centroid path - pinned by `test_frozen_v1_estimation_is_unaffected_by_this_entry`.
+
+### Tests
+
+New `tests/test_ingestion_sigmf_metadata.py`, **32 tests**: the standard key; sidecar
+discovery from `.iq` and from `.sigmf-data`; a missing sidecar yielding nothing;
+**seven parametrised malformed values rejected** (string, null, NaN, infinity, negative,
+bool, list); 0.0 accepted as baseband; unparseable JSON ignored rather than raised; a
+`captures`-less document ignored; `read_iq` / `read_wav` with and without a sidecar; an
+explicit sample-rate argument still winning; the sidecar supplying one when the caller
+does not; survival through `preprocess`; the estimator consuming it; the blind fallback
+still measurably wrong; SSB recovery > 0.99 with the sidecar and < 0.2 without; the three
+anti-leakage tests; headerless V1 ingestion unchanged; V1 still on the centroid path;
+hand-built containers unchanged; and caller-supplied metadata still honoured.
+
+- Focused: **32 passed**
+- Full suite: **646 passed, 1 failed** - the pre-existing `reedsolo` gap, with
+  `tests/test_model_report.py` ignored (pre-existing missing `h5py`)
+
+No existing test needed modification.
+
+### Remaining blockers - unchanged by this entry
+
+**CNN analog classification - dominant.** AM-SSB is still confidently mislabelled `WBFM`,
+so in production most SSB captures never reach `demodulate_ssb` no matter how accurate
+the carrier now is. This entry fixes the carrier, not the routing.
+
+**Baseband AM-DSB preprocessing.** `preprocessing.py:17` DC removal still destroys the
+carrier of a carrier-offset-0 AM-DSB capture; a sidecar does not help, because the
+information is destroyed after ingestion.
+
+**Blind SSB estimation** remains impossible (Entry 029) - captures without a sidecar are
+no better off.
+
+**WAV `auxi` chunks** are not parsed; a real SDR# recording would need a sidecar.
+
+**Demodulator quality**: no audio filtering, FM limiter or de-emphasis. **NBFM**: not
+implemented.
+
+---
+
+## Entry 031 - 2026-09-09 - Analog routing dominance: forensic investigation (READ-ONLY)
+
+**No production code, test, dataset or model was changed.** `git status` and
+`git diff --stat` are identical before and after. Frozen V1 untouched
+(`d6d3f918687d0700a43e46211c3f04b9`).
+
+Matrix: 4 analog configurations (AM-DSB, AM-SSB USB, AM-SSB LSB, WBFM) x 8 digital
+controls x 2 SNR x 4 seeds = 96 captures, traced through the full path with the default
+11-class checkpoint. A separate held-out run used unseen seeds 211-233 over four SNRs.
+
+### Q1/Q2 - how the correct analog label is lost (32 analog captures)
+
+| Mechanism | Count |
+|---|---|
+| **True label ABSENT from the CNN's top-3 entirely** | **11/32** |
+| True label in top-3 but out-ranked and below 0.4 | 10/32 |
+| **Wrong label at >= 0.4 accepted; fallback blocked by design** | **8/32** |
+| Rescued by the Entry 026 analog fallback | 3/32 |
+
+**Final correct: 3/32**, all AM-DSB at 20 dB.
+
+Per case, whether the true label appears in the CNN top-3 at all:
+
+| Case | present | ranks | final correct |
+|---|---|---|---|
+| AM-DSB | 7/8 | 3,2,2,2,-,3,1,3 | **3/8** |
+| AM-SSB USB | 5/8 | -,-,3,-,3,3,3,1 | 0/8 |
+| **AM-SSB LSB** | **0/8** | all absent | 0/8 |
+| WBFM | 2/8 | -,1,-,-,-,1,-,- | 0/8 |
+
+**The decisive finding: for AM-SSB LSB the CNN never emits `AM-SSB` at all** - not as
+top-1, not anywhere in the top-3, in any of 8 captures. LSB is instead called `PAM4`
+(0.36-0.59) or `QPSK`.
+
+**The exact dominance condition** (from `confidence_fusion.py`): fusion accepts
+`ml_label` whenever `probability >= threshold` (0.4), and the Entry 026 fallback is
+gated on `rejected and classical_family == "analog-like" and ml_label not in
+ANALOG_LABELS`. So a **wrong analog label above threshold is accepted unconditionally** -
+AM-SSB USB is called `WBFM` at 0.437-0.486 in 3/8 captures and routed to
+`demodulate_fm`. The classical `analog-like` verdict, at confidence 0.73-0.76, has no
+influence whatsoever on the label. That is by design (Entry 026 deliberately left this
+case alone) and it is the dominance problem.
+
+### Q3 - the three analog types ARE separable by features already in the pipeline
+
+Measured over the 32 analog captures:
+
+| Feature | AM-DSB (min/med/max) | AM-SSB | WBFM | separable pairs |
+|---|---|---|---|---|
+| `amp_cv` | 0.22/0.26/0.30 | **0.45/0.46/0.48** | 0.07/0.14/0.22 | **DSB/SSB, SSB/WBFM** |
+| `env_flat` | 0.06/0.18/0.33 | 0.02/0.07/0.15 | **0.55/0.56/0.58** | **DSB/WBFM, SSB/WBFM** |
+| `fr_cv` | 0.17/0.37/0.57 | 0.32/0.61/0.92 | 0.34/0.47/0.60 | none |
+| `if_std` (Hz) | 3465/7554/11686 | 6784/13560/20852 | 6875/9496/12227 | none |
+| `asym_db` | 11.65/13.72/15.15 | -1.85/12.25/17.56 | 0.16/0.84/1.59 | DSB/WBFM only |
+
+Instantaneous-frequency statistics (`fr_cv`, `if_std`) **do not separate the analog
+types** - they overlap heavily. Spectral asymmetry is unstable for SSB (LSB is negative,
+USB positive, and it collapses at low SNR).
+
+Two features suffice, and both are already computed by the classical detector or trivially
+derived from it:
+
+- **`env_flat`** (envelope spectral flatness) separates **WBFM** from both AM types:
+  WBFM 0.54-0.58 vs AM <= 0.33. WBFM is constant-envelope, so `|s|` carries no message.
+- **`amp_cv`** separates **AM-DSB (0.22-0.30) from AM-SSB (0.45-0.48)**.
+
+### Q4/Q5 - a conservative gate, validated on held-out seeds
+
+Candidate, evaluated **only** when the classical detector already says `analog-like`:
+
+    if env_flat > 0.40:  WBFM
+    elif amp_cv >= 0.37: AM-SSB
+    else:                AM-DSB
+
+Held-out validation, unseen seeds 211/223/227/229/233, SNR 20/15/10/5 dB:
+
+| Case | 20 dB | 15 dB | 10 dB | 5 dB |
+|---|---|---|---|---|
+| AM-DSB | 5/5 | 5/5 | 5/5 | (0 reached the gate) |
+| AM-SSB USB | 5/5 | 5/5 | 5/5 | (0 reached) |
+| AM-SSB LSB | 5/5 | 5/5 | 1/1 | (0 reached) |
+| WBFM | 5/5 | 5/5 | 5/5 | 4/4 |
+
+**60/60 = 100% correct** on every held-out capture the classical detector admitted.
+
+**Digital exposure: 0 of 480** digital captures (8 modulations x samples-per-symbol
+4/8/16 x 4 SNR x 5 seeds) were called `analog-like`, so **not one could reach the gate**.
+Digital false-positive analog routing is **0.00%** - the Entry 027 detector is the
+protective outer gate, and the type gate never sees digital signals at all.
+
+At 5 dB the classical detector rejects AM-DSB and AM-SSB entirely, so they are simply not
+routed. That is safe behaviour (no routing beats wrong routing), not a gate failure.
+
+### MEASURED LIMITATION - the AM-DSB/AM-SSB boundary depends on modulation depth
+
+`amp_cv` for AM-DSB is a direct function of modulation depth, which is a free generator
+parameter:
+
+| depth | 0.2 | 0.3 | 0.5 (default) | 0.7 | 0.9 | 1.0 |
+|---|---|---|---|---|---|---|
+| `amp_cv` | 0.108 | 0.143 | **0.219** | 0.299 | **0.379** | **0.419** |
+| gate says | AM-DSB | AM-DSB | AM-DSB | AM-DSB | **AM-SSB (wrong)** | **AM-SSB (wrong)** |
+
+**The gate is valid for modulation depth up to roughly 0.8 and misclassifies
+heavily-modulated AM-DSB as AM-SSB above that.** The project default is 0.5, comfortably
+inside the safe region, but this is an implicit assumption the rule encodes and it must
+be stated in any implementation. A depth-independent DSB/SSB discriminator would need
+spectral symmetry about the carrier, and Entries 029/030 established the carrier is only
+reliably known from a SigMF sidecar.
+
+### Recommended minimum safe production change - NOT implemented here
+
+**Must change (one place):** an analog-type gate consulted **only** when
+`classical_family == "analog-like"`, that supplies the analog label when the CNN cannot.
+The natural seam is `fuse_modulation`, extending the Entry 026 fallback so it fires not
+only when the CNN's top-1 is a rejected digital label, but also when the classical
+detector asserts analog and the CNN's analog evidence is absent or contradicted. The
+gate's verdict comes from the signal, not from the CNN's ranking - which is required,
+because for AM-SSB LSB the CNN produces no analog label to re-rank.
+
+**Could change later:** retraining the CNN with analog classes (the real fix - the gate
+is a workaround for a model that cannot see LSB); a depth-independent DSB/SSB
+discriminator using sidecar carrier information; extending analog detection below 10 dB.
+
+**Should NOT change in the first patch:** the 0.4 threshold; the classical detector
+(0/480 digital false positives - it is what makes the gate safe); dispatch; preprocessing;
+the CNN or its checkpoints; the BER guard; the generators.
+
+**Risk if the seam is chosen wrongly:** placing the gate before the threshold check, or
+outside the `analog-like` guard, would let it override confident digital predictions.
+Every measurement above depends on the gate being strictly downstream of the Entry 027
+verdict.
+
+### Honest summary
+
+Entries 026-030 fixed detection (30/32 analog-like), dispatch, and the SSB carrier, but
+end-to-end correctness is still **3/32** because the CNN cannot produce the right analog
+label. The gate is not a tuning exercise: it exists because **no amount of re-ranking can
+recover a label the model never emits** (AM-SSB LSB, 0/8). It is a stopgap until the CNN
+is retrained with analog classes.
+
+### Note on the task prompt
+
+The instruction list was truncated mid-sentence at "instantaneous-frequency". The
+investigation covered instantaneous-frequency statistics (`fr_cv`, `if_std`) among the
+candidate features and found they do **not** separate the analog types; envelope
+statistics do. No production change was made, since the task asked to determine the
+minimum safe change and to run the forensic experiment first.

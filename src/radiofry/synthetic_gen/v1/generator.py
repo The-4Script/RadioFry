@@ -240,10 +240,15 @@ def load_ground_truth(json_path: str | Path) -> dict[str, Any]:
     path = Path(json_path)
     metadata = json.loads(path.read_text(encoding="utf-8"))
     base = path.parent
+    bits = metadata.get("bits")
+    if bits is None:
+        # Analog captures carry no bits; None rather than an empty array so callers
+        # must decide explicitly instead of silently scoring zero bits.
+        return {"metadata": metadata, "source_bits": None, "transmitted_bits": None}
     return {
         "metadata": metadata,
-        "source_bits": np.load(base / metadata["bits"]["source_bits_file"]),
-        "transmitted_bits": np.load(base / metadata["bits"]["transmitted_bits_file"]),
+        "source_bits": np.load(base / bits["source_bits_file"]),
+        "transmitted_bits": np.load(base / bits["transmitted_bits_file"]),
     }
 
 

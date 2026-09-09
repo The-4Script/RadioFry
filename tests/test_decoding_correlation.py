@@ -72,7 +72,11 @@ def test_ssb_uses_product_detector() -> None:
     assert np.corrcoef(recovered[100:], audio[100:])[0, 1] > 0.9
 
 
-def test_dispatch_routes_ssb_and_reports_timing_search() -> None:
+def test_dispatch_routes_ssb_at_the_full_capture_rate() -> None:
+    # Entry 028: this used to assert the digital timing search ran for AM-SSB and
+    # compared against a DECIMATED reference (audio[offset::8]). Analog has no symbol
+    # rate, so that path is gone; the recovery assertion is kept and strengthened to
+    # compare against the FULL-rate message instead.
     sample_rate = 8_000
     time = np.arange(800) / sample_rate
     audio = np.sin(2 * np.pi * 40 * time)
@@ -84,10 +88,10 @@ def test_dispatch_routes_ssb_and_reports_timing_search() -> None:
     assert dispatched.available
     assert dispatched.result is not None
     assert dispatched.result.modulation == "AM-SSB"
-    assert "coarse timing search" in dispatched.message
-    offset = int(re.search(r"offset (\d+)", dispatched.message).group(1))
-    expected_audio = audio[offset::8][:dispatched.result.symbols.size]
-    assert np.corrcoef(dispatched.result.symbols[10:], expected_audio[10:])[0, 1] > 0.99
+    assert "coarse timing search" not in dispatched.message
+    assert "full-rate" in dispatched.message
+    assert dispatched.result.symbols.size == audio.size, "no decimation may occur"
+    assert np.corrcoef(dispatched.result.symbols[10:], audio[10:])[0, 1] > 0.99
 
 
 def test_dispatch_keeps_dsb_and_ssb_demodulators_distinct(monkeypatch: pytest.MonkeyPatch) -> None:

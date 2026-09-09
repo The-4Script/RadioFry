@@ -1,135 +1,160 @@
 ANTIGRAVITY COMMIT HANDOFF
-Branch: feature/synthetic-dataset-v1
+Branch: main
+Rewritten: 2026-09-09 (Entry 023 audit; updated for Entries 024, 026-030)
 
+STATUS: NOTHING IN THIS FILE HAS BEEN COMMITTED OR PUSHED.
+This file describes the CURRENT uncommitted working-tree delta only.
+
+The previous version of this file was stale: it named branch
+feature/synthetic-dataset-v1 (since merged in 0d0d9d7), listed ~30 files that are
+already committed, and claimed data/reports/models_saved were not covered by
+.gitignore. They are covered now. All of that has been removed.
+
+--------------------------------------------------------------------------------
 PURPOSE (one line)
-Add Synthetic Dataset V1 generator and evaluation harness, and fix three measured
-pipeline defects (CNN input adapter, symbol-rate feature, QAM amplitude scale).
+--------------------------------------------------------------------------------
+Analog synthetic signal generation (AM-DSB, AM-SSB, WBFM), the harness safety work
+that lets a bit-less capture pass through evaluation without a fabricated BER, and a
+minimal analog-aware fusion fallback.
 
 --------------------------------------------------------------------------------
-COMMIT THESE
+UNCOMMITTED - MODIFIED TRACKED FILES
 --------------------------------------------------------------------------------
 
-Modified production code (3 files):
-  src/radiofry/models/modulation_inference.py          native-rate windowing + 4-window
-                                                       mean-softmax inference
-  src/radiofry/dsp/parameter_estimation.py             adaptive symbol-rate feature selection
-  src/radiofry/decoding/demodulators/qam_demod.py      scale-invariant QAM slicing
-  src/radiofry/decoding/demodulators/dispatch.py       FSK-aware timing-offset selection
+Production (8):
+  src/radiofry/ingestion/iq_parser.py           read a SigMF sidecar's centre
+                                                frequency into metadata (Entry 030)
+  src/radiofry/ingestion/wav_parser.py          same for WAV (Entry 030)
+  src/radiofry/decoding/demodulators/dispatch.py  analog bypasses the digital
+                                                symbol-rate timing/decimation path;
+                                                ANALOG_LABELS + _demodulate_analog
+                                                (Entry 028). Digital untouched.
+  src/radiofry/dsp/cyclostationary.py           positive family-level analog test:
+                                                frequency_cv < 0.9 AND no fourth-power
+                                                line, placed after FSK/PSK and before
+                                                QAM; final else now "unknown"
+                                                (Entry 027). 0/800 digital FP.
+  src/radiofry/fusion/confidence_fusion.py      analog fallback: recover an analog
+                                                label from CNN alternatives when a
+                                                digital top-1 is rejected and the
+                                                classical family is analog-like
+                                                (Entry 026). Threshold unchanged.
+  src/radiofry/pipeline.py                      pass CNN confidences to fusion as
+                                                ranked_alternatives (Entry 026)
+  src/radiofry/evaluation/harness.py            analog BER-unavailable guard;
+                                                has_source_bits threaded through
+                                                evaluate_capture / _score_report
+                                                (Entry 021)
+  src/radiofry/synthetic_gen/v1/generator.py    load_ground_truth returns None bits
+                                                for a null bits block (Entry 021)
 
-Modified V1 generator (FSK deviation now an explicit swept dimension, default h=0.5):
-  src/radiofry/synthetic_gen/v1/config.py
-  src/radiofry/synthetic_gen/v1/generator.py
-  src/radiofry/synthetic_gen/v1/cli.py
-  src/radiofry/synthetic_gen/v1/__init__.py
+Documentation (5):
+  BANK.md                                       Entries 021-030 appended
+  OP.md                                         Runs 014-022 appended
+  ANTIGRAVITY_COMMIT.txt                        this file
+  research_memory/CURRENT.md                    rewritten (023); 024; 026-030 status
+  research_memory/INDEX.md                      Entry 017, Analog section, 023-030
 
-New source - Synthetic Dataset V1 generator:
-  src/radiofry/synthetic_gen/v1/__init__.py
-  src/radiofry/synthetic_gen/v1/__main__.py
-  src/radiofry/synthetic_gen/v1/channel.py
-  src/radiofry/synthetic_gen/v1/cli.py
-  src/radiofry/synthetic_gen/v1/config.py
-  src/radiofry/synthetic_gen/v1/generator.py
-  src/radiofry/synthetic_gen/v1/modulation.py
-  src/radiofry/synthetic_gen/v1/writers.py
+--------------------------------------------------------------------------------
+UNCOMMITTED - UNTRACKED FILES TO ADD (10)
+--------------------------------------------------------------------------------
 
-New source - V2.0 training pipeline:
-  src/radiofry/training/train_v2_synthetic.py
-
-Modified evaluation harness (optional --model checkpoint selection):
-  src/radiofry/evaluation/harness.py
-  src/radiofry/evaluation/cli.py
-
-New model artifacts (V2.0 synthetic-trained checkpoint, ~193 KB + metrics):
-  models_saved/modulation_cnn_v2_synth.pt
-  models_saved/modulation_cnn_v2_synth_metrics.json
-
-New source - evaluation harness:
-  src/radiofry/evaluation/__init__.py
-  src/radiofry/evaluation/__main__.py
-  src/radiofry/evaluation/cli.py
-  src/radiofry/evaluation/harness.py
-  src/radiofry/evaluation/metrics.py
-  src/radiofry/evaluation/report.py
-  src/radiofry/evaluation/symbol_rate_experiment.py
-
-New tests (15 files, 305 tests):
-  tests/test_synthetic_v1_modulation.py
-  tests/test_synthetic_v1_io.py
-  tests/test_synthetic_v1_dataset.py
-  tests/test_v1_harness.py
-  tests/test_v1_harness_metrics.py
-  tests/test_modulation_inference_input.py
-  tests/test_symbol_rate_diagnostics.py
-  tests/test_symbol_rate_feature_comparison.py
-  tests/test_symbol_rate_estimator_regression.py
-  tests/test_qam_demodulation_diagnostics.py
-  tests/test_qam_demodulation_scale.py
-  tests/test_qam_routing_diagnostics.py
-  tests/test_modulation_inference_windows.py
-  tests/test_fsk_timing_dispatch.py
-  tests/test_v2_training_pipeline.py
-
-Documentation:
-  BANK.md                      engineering change log, Entries 001-015
-  OP.md                        operational run log
-  ANTIGRAVITY_COMMIT.txt       this handoff file
+  src/radiofry/ingestion/sidecar.py             minimal SigMF .sigmf-meta reader for
+                                                core:frequency / core:sample_rate only;
+                                                rejects malformed values (Entry 030)
+  src/radiofry/synthetic_gen/v1/analog.py       AM-DSB + AM-SSB + WBFM generation,
+                                                separate ANALOG_MODULATIONS registry
+                                                (Entries 020, 022, 024)
+  tests/test_synthetic_am_dsb.py                31 tests
+  tests/test_synthetic_am_ssb.py                28 tests
+  tests/test_analog_harness_safety.py           15 tests
+  tests/test_synthetic_wbfm.py                  34 tests
+  tests/test_fusion_analog_fallback.py          19 tests
+  tests/test_classical_analog_detection.py      40 tests
+  tests/test_analog_dispatch_bypass.py          32 tests
+  tests/test_ingestion_sigmf_metadata.py        32 tests
 
 --------------------------------------------------------------------------------
 DO NOT COMMIT
 --------------------------------------------------------------------------------
 
-Generated data (~9.1 MB, fully reproducible from seeds recorded in ground truth):
-  data/synthetic_v1/                     8.8 MB, 30 captures
-  data/synthetic_v1_shortframe/          316 KB, 30 control captures
+Already excluded by .gitignore - verify they stay out:
+  /data/            frozen V1 dataset; fully reproducible from recorded seeds
+  /reports/         harness output; regenerable
+  /models_saved/    V2.0 checkpoints
+  __pycache__/, .pytest_cache/, *.egg-info/
 
-Generated evaluation output (~2.2 MB, regenerable by re-running the harness):
-  reports/v1_baseline/
-  reports/v1_baseline_shortframe/
-  reports/v1_after_cnn_input_fix/
-  reports/v1_shortframe_after_cnn_input_fix/
-  reports/v1_after_symbol_rate_fix/
-  reports/v1_after_qam_scale_fix/
-  reports/symbol_rate_feature_comparison/
-  reports/v1_after_multiwindow/
-  reports/v1_after_fsk_sweep/
-  reports/v1_after_fsk_timing/
-  reports/v2_newmodel/
+Spent one-off files, left in place for the user to decide on:
+  scratch.py        throwaway script that parsed the OLD version of this file to
+                    build a commit list. Obsolete now that this file is rewritten.
+  commit_msg.txt    a copy of the V1 commit message, which is already committed.
 
-NOTE: these paths are NOT matched by the current .gitignore (it only covers
-reports/*.png and data/synthetic/**/*.npy). They must be excluded manually when
-staging, or .gitignore updated in a SEPARATE commit. Do not use `git add -A`.
-All measured numbers from these artefacts are already recorded in BANK.md.
+No analog dataset artifacts exist anywhere in the repo - the AM-DSB, AM-SSB and
+WBFM tests write captures into pytest tmp_path only.
 
-Also exclude as usual: __pycache__/, .pytest_cache/, *.egg-info/
+--------------------------------------------------------------------------------
+TEST STATE AT HANDOFF
+--------------------------------------------------------------------------------
+
+  python -m pytest -q --ignore=tests/test_model_report.py
+  -> 646 passed, 1 failed
+
+The --ignore is required: tests/test_model_report.py imports h5py, which is not
+installed, and the collection error aborts the whole session. The one failure is
+test_decoding_correlation.py::test_reed_solomon_round_trip - reedsolo is not
+installed. Both gaps are environmental and pre-date this work.
+
+Focused regression (9 files incl. fusion, QAM routing, FSK timing): 193 passed.
 
 --------------------------------------------------------------------------------
 SUGGESTED COMMIT MESSAGE
 --------------------------------------------------------------------------------
 
-feat: add Synthetic Dataset V1 with evaluation harness and fix three pipeline defects
+feat: add AM-DSB, AM-SSB and WBFM synthetic generation with analog harness safety
 
-Adds a controlled, reproducible synthetic dataset generator (BPSK/QPSK/8PSK/BFSK/
-16QAM/64QAM, configurable rates and SNR sweep, AWGN only, full ground truth) plus a
-harness that scores the pipeline against it and reports unavailable metrics honestly.
+Adds analog synthetic capture generation in a registry deliberately separate from
+the digital MODULATIONS registry, so the three call sites that default to
+tuple(MODULATIONS) do not silently widen. AM-DSB uses a retained carrier
+(1 + m*s(t)); AM-SSB uses the analytic signal, with USB as the documented default
+and LSB configurable, recorded per capture in ground truth. WBFM integrates the
+message phase explicitly - phi[n] = (2*pi/Fs) * cumsum(f_c + df*s[k]) - giving a
+constant-envelope waveform whose configured peak deviation is reproduced exactly.
 
-Baseline measurement exposed three defects, each fixed with a minimal change and
-regression tests:
-- modulation_inference: long captures were decimated 256x with no anti-alias filter;
-  now windowed at the native rate, and scored over 4 evenly spaced windows whose
-  softmax vectors are averaged. CNN top-1 on V1 0% -> 73%, 16QAM 0% -> 80%.
-- parameter_estimation: the envelope-squaring feature has an exact null at the symbol
-  rate for rectangular pulses; now selects among three features by confidence.
-  Symbol rate within 1% 0% -> 96.7%; BPSK/QPSK reach 0.000 BER at high SNR.
-- qam_demod: sliced against an unnormalised +/-1/+/-3 grid while the pipeline delivers
-  unit-RMS symbols; now scale-invariant. 16QAM/64QAM 0.000 BER when correctly routed.
+Analog captures carry no bits, no symbol rate and no Es/N0. Two fixes make the
+evaluation harness handle that honestly rather than crashing or inventing a metric:
+load_ground_truth returns None for a null bits block, and the harness forces
+ber_status="unavailable" with reason "analog_no_transmitted_bits" even when
+dispatch synthesises threshold bits.
 
-Together these take median strict BER on V1 from 0.4944 to 0.0293, with 16QAM reaching
-0.000 BER at 20 dB. Multi-window inference also raises fusion rejection 0.133 -> 0.200,
-costing three low-SNR captures that previously produced chance-level BER under a wrong
-label; fusion itself was not modified.
+Independent oracles validate generation only - not demodulation. AM-SSB
+unwanted-sideband suppression measures 140-176 dB per tone against a 30 dB target.
+WBFM peak deviation measures 15000.000 Hz against 15000.0 configured, with noiseless
+message-recovery correlation of 1.000000 and monotone degradation under AWGN.
 
-Tests: 358 passed. The single failure (test_reed_solomon_round_trip) is pre-existing
-and environmental - reedsolo is not installed.
+Known limitation, not addressed here: the CNN has no analog class, so analog
+captures never reach demodulate_am / demodulate_ssb. AM-DSB is labelled PAM4 and
+WBFM is labelled BPSK, which routes WBFM into the 2PSK demodulator; the guard
+correctly refuses to score the resulting bits. No classifier, fusion threshold or
+dispatch route was changed to hide this. Entry 026 adds a narrow fusion fallback
+that recovers an analog label from the CNN's own ranked alternatives when a digital
+top-1 is already rejected and the classical family is analog-like; measured benefit
+is 1 firing in 15 analog captures, and 0 of 40 frozen V1 captures change.
+Entry 027 then gives the classical detector a positive analog test (frequency_cv
+below 0.9 with no fourth-power line) in place of decision-by-elimination: 0 of 800
+digital controls become analog-like and no digital capture changes family, while
+AM-DSB at a non-zero carrier offset now routes to demodulate_am in 4 of 5 seeds.
+Entry 028 then makes analog dispatch symbol-rate independent: analog no longer
+requires or uses a symbol rate, and no longer decimates by one. WBFM message
+recovery through dispatch goes 0.145 -> 1.000, AM-DSB message tones stop aliasing,
+and AM-DSB at a non-zero carrier offset recovers 0.94 correlation end to end.
+Digital dispatch, including both timing-offset heuristics, is unchanged.
+Entry 030 closes the SSB carrier gap at the ingestion layer: a SigMF .sigmf-meta
+sidecar now populates metadata["center_frequency_hz"], which estimate_parameters
+already preferred and preprocess already preserved. SSB recovers at 0.995-1.000
+with a sidecar and is unchanged without one. The synthetic generator writes no
+sidecars, so ground truth can never reach production ingestion.
 
-Known remaining issue: BFSK still classifies at 0% and demodulates at ~0.51 BER. Not
-addressed here.
+Tests: 646 passed (test_model_report.py ignored - h5py absent). The single failure,
+test_reed_solomon_round_trip, is pre-existing and environmental.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
