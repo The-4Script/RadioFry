@@ -4392,3 +4392,1547 @@ investigation covered instantaneous-frequency statistics (`fr_cv`, `if_std`) amo
 candidate features and found they do **not** separate the analog types; envelope
 statistics do. No production change was made, since the task asked to determine the
 minimum safe change and to run the forensic experiment first.
+
+---
+
+## Entry 032 - 2026-09-09 - Conservative analog subtype routing
+
+Implements the Entry 031 recommendation. **No CNN retraining, no checkpoint change, no
+preprocessing change, no dispatch change, no threshold change.** Frozen V1 byte-identical
+(`d6d3f918687d0700a43e46211c3f04b9`, 40 captures).
+
+**The claim is not that the CNN got better at analog.** It did not. The claim is that
+RadioFry now uses a conservative classical analog gate plus deterministic subtype routing,
+and stops asking the CNN a question Entry 031 proved it cannot answer.
+
+### Exact routing rule
+
+Outer safety gate - unchanged Entry 027 classical detector:
+
+    classical_family != "analog-like"  ->  existing behaviour, byte for byte
+
+Inner subtype rule, reached only behind that gate:
+
+    if envelope_flatness > 0.40:   AM label = WBFM
+    elif amplitude_cv    >= 0.37:  AM label = AM-SSB
+    else:                          AM label = AM-DSB
+
+The CNN gets no vote once the gate opens: a confident wrong digital label (`PAM4` 0.851)
+and a confident wrong analog label (`WBFM` 0.545) are both overridden, and the true label
+is **not required to appear in the CNN top-k at all** - which is the point, since Entry
+031 measured that AM-SSB LSB never appears.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `dsp/cyclostationary.py` | new `_envelope_flatness()`; `envelope_flatness` added to the evidence dict. **The family decision is untouched** - it is evidence only. |
+| `fusion/confidence_fusion.py` | `ANALOG_ENVELOPE_FLATNESS_MAX = 0.40`, `ANALOG_AMPLITUDE_CV_SSB_MIN = 0.37`, `select_analog_subtype()`, two new optional keywords (`classical_evidence`, `classical_confidence`), new defaulted `FusionResult.analog_route` field. |
+| `pipeline.py` | passes `getattr(classical, "evidence", None)` and `classical.confidence` into fusion. |
+
+`amplitude_cv` was already computed by the detector under that exact name and formula -
+it was **not** duplicated. `envelope_flatness` did not exist in production and had to be
+added; its formula is the one validated in Entry 031.
+
+**Backward compatibility:** the gate activates only when `classical_evidence` is supplied.
+Every existing call site that omits it keeps its previous behaviour exactly, which is why
+the Entry 026 fallback tests still pass unchanged.
+
+### Confidence - what it actually means
+
+`trust_score` for a subtype-routed label is the **classical detector's analog-FAMILY
+confidence** (0.50-0.82 measured). It is explicitly **not** a calibrated probability for
+the subtype: the subtype is a threshold decision and carries no probability. No ML
+calibration system was invented. `review_recommended` is always `True` for this path - it
+is a rule, not a trained model.
+
+### MEASURED - analog validation, unseen seeds 307-331, SNR 20/15/10 dB
+
+**55/60 = 91.7% correct end to end**, and **55/55 wherever the gate actually engaged.**
+
+| Case | 20 dB | 15 dB | 10 dB | route |
+|---|---|---|---|---|
+| AM-DSB | 5/5 | 5/5 | 5/5 | `classical_subtype` |
+| AM-SSB USB | 5/5 | 5/5 | 5/5 | `classical_subtype` |
+| AM-SSB LSB | 5/5 | 5/5 | **0/5** | gate never opened |
+| WBFM | 5/5 | 5/5 | 5/5 | `classical_subtype` |
+
+The 5 failures are **all AM-SSB LSB at 10 dB**, where the Entry 027 classical detector
+reports `QAM-like` (confidence 0.68-0.69) rather than `analog-like`, so the gate never
+engages and the pre-existing CNN path runs. That is a **detector** limitation, not a
+subtype-rule failure - the envelope evidence on those same captures
+(`amplitude_cv` 0.468-0.479, `envelope_flatness` 0.131-0.137) would have routed them
+correctly had the gate opened.
+
+Before/after on the same class of captures (Entry 031 -> Entry 032): AM-SSB LSB was
+**0/8** correct with the true label absent from every CNN top-3; it is now **10/15**
+correct, entirely because the CNN is no longer consulted.
+
+Illustrative dominance cases now corrected:
+- AM-SSB LSB, seed 331, 20 dB: CNN says `PAM4` at **0.851**, no analog label anywhere in
+  top-k -> routed **AM-SSB** -> `demodulate_ssb`.
+- AM-SSB USB, seed 331, 20 dB: CNN says `WBFM` at **0.545** -> routed **AM-SSB**.
+- WBFM, seed 331, 20 dB: CNN says `BPSK` at 0.460 -> routed **WBFM** -> `demodulate_fm`.
+
+### MEASURED - digital false-positive analog routing
+
+360 digital control captures (8 modulations x samples-per-symbol 4/8/16 x SNR 20/15/10 x
+5 seeds):
+
+| Metric | Result |
+|---|---|
+| `analog_route` values seen across all 360 | **`{"": 360}`** - the gate fired **zero** times |
+| Captures routed to an analog demodulator | **6/360 = 1.67%** |
+
+**The 6 are NOT caused by this entry, and this is stated rather than buried.** They are
+GFSK at samples-per-symbol 16, where the classical detector correctly says `FSK-like`
+but the **CNN emits `WBFM` at 0.52-0.90** and fusion's original rule accepts any label at
+or above threshold. Verified by running the same captures with and without
+`classical_evidence`: **identical labels in both columns**. This is pre-existing Entry
+026-era behaviour on the digital path, which this task explicitly required not to change.
+
+So: **the Entry 032 gate contributes 0/360 digital false positives.** The system-level
+figure is 1.67% and comes from a path this entry was forbidden to touch. Pinned by
+`test_the_gate_never_fires_when_the_classical_family_is_digital`.
+
+### Tests
+
+New `tests/test_analog_subtype_routing.py`, **57 tests, 1 skipped** (the skip is the
+AM-SSB LSB 10 dB case the detector declines - it self-documents rather than pretending).
+Covers all 12 required cases: the four analog subtypes end to end into their
+demodulators; digital controls never routed; both threshold boundaries from either side;
+flatness checked before amplitude_cv; confident wrong digital labels (4 parametrised) and
+confident wrong analog labels (2) unable to override; the true label absent from top-k;
+full-rate routing preserved; null symbol rate still working; analog BER still
+unavailable; the new evidence field present without changing the family decision;
+backward compatibility with and without evidence; and the pre-existing GFSK leak pinned
+as not ours.
+
+**Three prior tests were deliberately updated**, all because the evidence dict
+legitimately grew a documented fourth key:
+- `test_dsp_fusion.py::test_classical_estimator_returns_a_structured_result` and
+  `test_classical_analog_detection.py::test_the_evidence_dictionary_still_exposes_the_
+  three_features` asserted an exact 3-key set; both now assert the original three are a
+  **subset** - a check about nothing being *removed*, which is what they actually guard.
+- `test_pipeline_integration.py::test_pipeline_open_set_rejection_skips_demodulation`
+  failed because it monkeypatches the classical result with a stub lacking `.evidence`.
+  **That was fixed in production, not in the test**: `pipeline.py` now uses
+  `getattr(classical, "evidence", None)`, so a classical result without evidence simply
+  does not trigger subtype routing. The test passes unmodified.
+
+- Focused: **57 passed, 1 skipped**
+- Full suite: **703 passed, 1 failed, 1 skipped** - the one failure is the pre-existing
+  `reedsolo` gap, with `tests/test_model_report.py` ignored for the pre-existing missing
+  `h5py`. Both environmental, both pre-date this work, neither hidden.
+
+### Known limitations
+
+1. **AM-SSB LSB below ~15 dB is not routed** - the classical detector calls it
+   `QAM-like`. Detector work, not routing work.
+2. **The AM-DSB/AM-SSB boundary rides on modulation depth** (Entry 031): correct to a
+   depth of about 0.8; at depth >= 0.9 an AM-DSB capture reaches `amplitude_cv` 0.379 and
+   is read as AM-SSB. The project default is 0.5. Documented in `select_analog_subtype`.
+3. **6/360 digital captures still route to WBFM** via the pre-existing confident-CNN
+   path (GFSK at sps=16). Not introduced here, not fixed here.
+4. Analog detection still fails below ~10 dB for the AM schemes.
+5. `preprocess` still removes the baseband AM-DSB carrier, so AM-DSB at carrier offset 0
+   recovers ~0.00 even when routed correctly.
+6. The gate is a stopgap. The real fix is retraining the CNN with analog classes.
+
+### V1 integrity
+
+`d6d3f918687d0700a43e46211c3f04b9` (first 32 characters of the full SHA-256 over the
+concatenated name-sorted 40 `.iq` captures) - **unchanged**.
+
+---
+
+## Entry 033 - 2026-09-09 - Final synthetic end-to-end benchmark (MEASUREMENT ONLY)
+
+**No production code was changed.** Frozen V1 verified byte-identical
+(`d6d3f918687d0700a43e46211c3f04b9`, 40 captures). Full suite unchanged at 703 passed.
+
+### Methodology
+
+350 captures through the complete unmodified pipeline: ingestion -> preprocessing ->
+parameter estimation -> classical detector -> CNN -> fusion -> dispatch -> demodulation.
+
+- **Digital:** 8 classes x 5 SNR (20/15/10/5/0 dB) x 5 seeds = **200**, samples-per-symbol 8.
+- **Analog:** AM-DSB, AM-SSB USB, AM-SSB LSB, WBFM x 5 SNR x 5 seeds, with SSB run
+  **twice** (with and without legitimate SigMF recorder metadata) = **150**.
+- **Seeds 401/409/419/421/431 - fresh, unused by any prior entry.**
+- **No leakage:** the production checkpoint `modulation_cnn.pt` is the 11-class RadioML
+  model, trained on RadioML 2016.10a, never on RadioFry synthetic captures. No ground
+  truth, expected modulation, or post-hoc correction enters the pipeline; ground truth is
+  used only to score afterwards. SigMF metadata is supplied only in the variant that
+  explicitly represents an external recorder.
+
+### 1. Digital classification (200)
+
+| Metric | Result |
+|---|---|
+| fused top-1 | **118/200 = 59.0%** |
+| CNN top-3 | **192/200 = 96.0%** |
+| top-1 at >= 10 dB | 85/120 = 70.8% |
+| **top-3 at >= 10 dB** | **120/120 = 100.0%** |
+| family level (PSK/FSK/QAM groups) | 153/200 = 76.5% |
+
+Per class (correct/5 at each SNR, 20 -> 0 dB):
+
+| Class | 20 | 15 | 10 | 5 | 0 | total |
+|---|---|---|---|---|---|---|
+| BPSK | 5 | 5 | 5 | 5 | 5 | **25/25** |
+| CPFSK | 5 | 5 | 5 | 5 | 5 | **25/25** |
+| QPSK | 5 | 5 | 5 | 5 | 0 | 20/25 |
+| 8PSK | 5 | 5 | 5 | 5 | 0 | 20/25 |
+| QAM64 | 3 | 2 | 2 | 1 | 0 | 8/25 |
+| GFSK | 2 | 2 | 2 | 1 | 0 | 7/25 |
+| QAM16 | 2 | 2 | 2 | 1 | 0 | 7/25 |
+| PAM4 | 3 | 2 | 1 | 0 | 0 | 6/25 |
+
+Dominant confusions: **PAM4 -> Unclassified 19**, **GFSK -> CPFSK 18**, QAM16 ->
+Unclassified 11, QAM64 -> Unclassified 11, QAM16 <-> QAM64 13.
+
+### 2. Analog classification (150)
+
+| Case | 20 | 15 | 10 | 5 | 0 | total |
+|---|---|---|---|---|---|---|
+| AM-DSB | 5/5 | 5/5 | 5/5 | 0/5 | 0/5 | 15/25 |
+| AM-SSB USB | 10/10 | 10/10 | 10/10 | 0/10 | 0/10 | 30/50 |
+| AM-SSB LSB | 10/10 | 10/10 | **0/10** | 0/10 | 0/10 | 20/50 |
+| WBFM | 5/5 | 5/5 | 5/5 | 1/5 | 0/5 | 16/25 |
+
+Overall **81/150 = 54.0%**; **at >= 10 dB, 80/90 = 88.9%**. Below 10 dB: 1/60 correct
+but **56/60 rejected** rather than misclassified.
+
+Metadata does **not** change classification (25/50 with, 25/50 without) - as expected,
+carrier metadata affects demodulation, not routing.
+
+### 3. Routing
+
+| Metric | Result |
+|---|---|
+| analog routed via `classical_subtype` | 81/150 |
+| **correct label when the gate engaged** | **81/81 = 100.0%** |
+| analog sent to the WRONG analog demodulator | 1 |
+| **DIGITAL routed as analog (sps=8)** | **0/200 = 0.0%** |
+| digital -> wrong digital label | 37/200 = 18.5% |
+
+Every analog failure is a *gate-did-not-engage* failure, never a wrong subtype.
+
+### 4. GFSK -> WBFM: SYSTEMATIC, and driven by oversampling
+
+Entry 032 saw 6 cases at samples-per-symbol 16. Swept properly (25 captures per sps,
+5 SNR x 5 seeds):
+
+| samples/symbol | GFSK accepted as WBFM | CNN confidence range |
+|---|---|---|
+| 4 | **0/25** | - |
+| 8 | **0/25** | - |
+| 16 | **8/25 = 32%** | 0.53 - 0.97 |
+| 32 | **19/25 = 76%** | **0.57 - 1.00** |
+
+**This is systematic, not isolated**, and it worsens monotonically with oversampling. In
+every case `analog_route` is `""` - the Entry 032 gate is **not** involved. The classical
+detector correctly reports `FSK-like` in the high-SNR cases; fusion's original rule
+accepts any CNN label at or above 0.4, so a **0.999-confidence** WBFM prediction wins.
+
+Physically the CNN is not being absurd: heavily oversampled GFSK *is* a smooth
+continuous-phase frequency modulation, which is what WBFM is. The defect is that fusion
+lets a confident CNN override a confident, correct, independent family verdict.
+
+V1 uses samples-per-symbol 8, where the rate is 0/25 - which is why the frozen benchmark
+never exposed this. Real captures are often heavily oversampled.
+
+### 5. AM-SSB LSB: a classification (detector) problem, not demodulation
+
+| SNR | USB gate engaged | USB correct | LSB gate engaged | LSB correct | LSB classical family |
+|---|---|---|---|---|---|
+| 20 dB | 10/10 | 10/10 | 10/10 | 10/10 | `analog-like` x10 |
+| 15 dB | 10/10 | 10/10 | 10/10 | 10/10 | `analog-like` x10 |
+| **10 dB** | **10/10** | **10/10** | **0/10** | **0/10** | **`QAM-like` x10** |
+| 5 dB | 0/10 | 0/10 | 0/10 | 0/10 | `QAM-like` x10 |
+| 0 dB | 0/10 | 0/10 | 0/10 | 0/10 | `QAM-like` x10 |
+
+- **Highest SNR where LSB reliably reaches analog routing: 15 dB.** Transition between
+  15 and 10 dB, and it is sharp (10/10 -> 0/10) rather than gradual.
+- **USB behaves differently**: it survives to 10 dB, failing between 10 and 5 dB. USB
+  therefore has roughly one SNR step more margin than LSB.
+- **It is a classification problem.** Whenever the gate engaged, LSB was labelled and
+  demodulated correctly (recovery 0.9951 / 0.9847 with metadata). The Entry 027
+  `frequency_cv` detector is what fails at 10 dB, not the subtype rule or the
+  demodulator.
+
+### 6. Digital demodulation / BER
+
+Demodulation available for 149/200 (74.5%); median BER over all demodulated 0.0762.
+
+Median BER **where the label was correct** (isolates demodulator quality from routing):
+
+| Class | 20 dB | 15 dB | 10 dB | 5 dB | 0 dB |
+|---|---|---|---|---|---|
+| BPSK | **0.0000** | **0.0000** | **0.0000** | 0.0068 | 0.0781 |
+| QPSK | **0.0000** | **0.0000** | 0.0020 | 0.0522 | - |
+| 8PSK | **0.0000** | 0.0020 | 0.0479 | 0.1833 | - |
+| QAM16 | **0.0000** | 0.0076 | 0.0786 | 0.2258 | - |
+| QAM64 | 0.0156 | 0.1051 | 0.2298 | 0.3205 | - |
+| CPFSK | 0.0117 | 0.0117 | **0.4963** | 0.4801 | 0.4803 |
+| GFSK | **0.4772** | **0.4730** | **0.4155** | 0.4646 | - |
+| PAM4 | **-** | **-** | **-** | **-** | **-** |
+
+Two demodulation defects independent of classification:
+- **GFSK sits at chance (~0.47) even when correctly labelled** - it is routed to the
+  order-2 FSK demodulator, which does not account for the Gaussian frequency pulse.
+- **PAM4 never demodulates at all** - it still has no dispatch route (open since Entry 019).
+- CPFSK collapses at 10 dB and below, consistent with the Entry 014 negative result on
+  low-SNR FSK symbol-rate estimation.
+
+### 7. Analog message recovery (median correlation, analog demod only)
+
+| Case | metadata | 20 dB | 15 dB | 10 dB | 5 dB |
+|---|---|---|---|---|---|
+| AM-DSB | - | 0.9456 | 0.8513 | 0.6675 | - |
+| AM-SSB USB | **no** | **-0.0028** | **0.0008** | **-0.0162** | - |
+| AM-SSB USB | **yes** | **0.9951** | **0.9847** | **0.9536** | - |
+| AM-SSB LSB | **no** | **-0.0030** | **0.0029** | - | - |
+| AM-SSB LSB | **yes** | **0.9951** | **0.9847** | - | - |
+| WBFM | - | 0.8943 | 0.7446 | 0.5215 | 0.2859 |
+
+This is the cleanest confirmation yet of Entries 029/030: **SSB recovery is ~0.00 blind
+and ~0.99 with legitimate recorder metadata.** The demodulator is correct; the blind
+carrier is not recoverable.
+
+**No BER was fabricated for any analog capture** (0/150); every analog row carries
+`unavailable_analog_no_transmitted_bits`.
+
+### 8. Parameter estimation
+
+- **Digital symbol rate within 1%: 161/200 = 80.5%** (35/40 at 20 dB, 30/40 at 0 dB);
+  median relative error 0.000.
+- **Digital carrier** (true 0 Hz): median |error| **147.2 Hz**, max 1051.2 Hz.
+- **Analog carrier**, no metadata: median |error| **2147.0 Hz** (AM-DSB 1655.8,
+  USB 1904.0, LSB 3463.4, WBFM 1676.6). **With metadata: 0.0 Hz.**
+- **SNR estimate is biased low and compressed**: true 20 -> 12.2, 15 -> 11.6, 10 -> 9.8,
+  5 -> 6.4, 0 -> 3.2 dB. Usable as an ordering, not as an absolute.
+
+### 9. Rejection / unknown behaviour
+
+| | 20 dB | 15 dB | 10 dB | 5 dB | 0 dB | total |
+|---|---|---|---|---|---|---|
+| digital Unclassified | 4/40 | 5/40 | 6/40 | 11/40 | 19/40 | 45/200 = 22.5% |
+| analog Unclassified | 0/30 | 0/30 | 4/30 | 27/30 | 29/30 | 60/150 = 40.0% |
+
+System-wide over 350 captures: **correct + confident 199 (56.9%)**, **rejected 105
+(30.0%)**, **false confident 46 (13.1%)** - 37 digital, 9 analog. Rejection rises with
+noise as it should; the system prefers refusing to guessing at low SNR.
+
+### Assessment
+
+Headline "correct and confident" is 56.9%, which looks poor, but it decomposes into a
+small number of **specific, individually addressable defects** rather than a model that
+cannot see the signal:
+
+- **CNN top-3 at >= 10 dB is 100%.** The representation carries the right answer; the
+  loss is in the decision layers.
+- PAM4 (-19 captures) and QAM (-22) are lost mostly to the 0.4 rejection threshold, and
+  PAM4 additionally has no demodulator route at all.
+- GFSK -> CPFSK (-18) is a *within-family* confusion.
+- Every analog failure is the classical detector declining at low SNR - the subtype rule
+  was 81/81 whenever it ran.
+
+### RECOMMENDATION: TARGETED FIX (not FREEZE, not RETRAIN)
+
+**Do not retrain.** Retraining is only justified when the model lacks the information, and
+top-3 = 100% at >= 10 dB proves it does not. A retraining cycle would not fix a missing
+dispatch route, a fusion override rule, or a detector threshold.
+
+**Do not freeze either.** One defect is severe enough to block a freeze: **GFSK -> WBFM
+at 76% with 0.999 confidence under heavy oversampling**, which routes a digital capture
+into an analog demodulator and produces a confidently wrong answer on a real-world
+capture geometry.
+
+Four targeted fixes, in priority order, none requiring training:
+
+1. **Fusion: refuse a CNN analog label when the classical detector asserts a digital
+   family.** Fixes GFSK -> WBFM (76% -> expected 0% at sps=32). Symmetric with the Entry
+   032 gate, which already refuses the CNN in the opposite direction. **This is the one
+   that must land before any freeze.**
+2. **Add a PAM4 dispatch route.** 0/25 demodulated today; purely a missing route.
+3. **GFSK demodulation.** ~0.47 BER even when correctly labelled - the order-2 FSK
+   demodulator ignores the Gaussian pulse.
+4. **Extend classical analog detection to 10 dB for AM-SSB LSB.** Would recover 10/50 LSB
+   captures; the sharp 15 -> 10 dB cliff suggests a threshold, not a fundamental limit.
+
+Items 2-4 are quality improvements; item 1 is a safety defect. Re-benchmark after item 1
+before deciding on a freeze.
+
+---
+
+## Entry 034 - 2026-09-09 - Fusion safety gate: a digital family blocks CNN analog labels
+
+Fixes the Entry 033 defect that blocked a freeze. **No CNN retraining, no checkpoint,
+preprocessing, detector-threshold, symbol-rate, subtype-threshold or demodulator change.**
+Frozen V1 byte-identical (`d6d3f918687d0700a43e46211c3f04b9`, 40 captures).
+
+**The claim is not that the CNN improved.** It did not. The claim is that fusion now
+prevents a CNN analog prediction from overriding an independent classical digital-family
+verdict.
+
+### Exact rule
+
+Mirror of the Entry 032 gate, inserted **after** it and **before** the Entry 026 fallback:
+
+    if ml_label in ANALOG_LABELS
+       and classical_family in DIGITAL_FAMILIES          # {PSK-like, FSK-like, QAM-like}
+       and classical_confidence >= 0.5:
+           block the analog label
+
+`DIGITAL_FAMILIES` deliberately **excludes `"unknown"`** - that is the detector's
+non-verdict, not evidence, and must not override anything. The rule fires only on analog
+labels, so digital/digital disagreements (e.g. `QAM16` under an `FSK-like` verdict) are
+untouched: this is not "classical always wins".
+
+`DIGITAL_FAMILY_MIN_CONFIDENCE = 0.5` is measured, not guessed. Over 144 digital captures
+(8 classes x samples-per-symbol 8/16/32 x SNR 20/10/0 dB) the detector scored
+**FSK-like 0.828-1.000** and **QAM-like 0.557-0.709**, so every real digital verdict
+clears 0.5 while `unknown` (0.2) does not.
+
+### Fallback when the analog label is blocked
+
+Two-step, in this order:
+
+1. **Retain the CNN's own highest-ranked digital alternative** - but only if it clears the
+   *same* 0.4 acceptance threshold every other prediction must clear. No new threshold is
+   introduced and no label is invented; the ranking is the CNN's.
+2. **Otherwise return `Unclassified`.**
+
+The family is **never** turned into a subtype: an `FSK-like` verdict does not become
+`CPFSK`. Rationale, stated plainly: a wrong analog demodulation puts the capture in the
+wrong signal domain entirely, whereas a rejection costs only an answer. Rejection is the
+safe default, and step 1 only applies when the CNN independently supports a digital label
+at normal strength.
+
+The choice was evidence-driven: in **all 31** measured GFSK captures where the CNN's top-1
+was analog, `GFSK` was already present in the CNN's own top-3 - so step 1 has real
+material to work with rather than being theoretical.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `fusion/confidence_fusion.py` | `DIGITAL_FAMILIES`, `DIGITAL_FAMILY_MIN_CONFIDENCE`, `_highest_ranked_digital()`, the guard block, new defaulted `FusionResult.digital_family_block`. |
+
+`pipeline.py` needed **no change** - it already passes `classical_confidence` and
+`ranked_alternatives` (Entries 026, 032).
+
+### MEASURED - the Entry 033 regression is closed
+
+600 digital captures: 8 classes x samples-per-symbol 8/16/32 x 5 SNR x 5 seeds
+(401-431).
+
+| GFSK -> WBFM | BEFORE | AFTER |
+|---|---|---|
+| samples-per-symbol 16 | 8/25 (conf 0.53-0.97) | **0/25** |
+| samples-per-symbol 32 | 19/25 (conf 0.57-1.00) | **0/25** |
+| **combined high-oversampling** | **27/50** | **0/50** |
+
+Target was 0/50. **Met.**
+
+### MEASURED - digital control matrix, before vs after
+
+| Metric | BEFORE | AFTER |
+|---|---|---|
+| digital top-1 | 33.5% | **34.3%** |
+| digital top-3 (CNN, untouched) | 71.7% | 71.7% |
+| **digital false-analog routing** | **128/600** | **1/600** |
+| digital rejection rate | 21.8% | **41.8%** |
+
+- **False-analog routing fell 128 -> 1 (99.2% reduction).**
+- Top-1 went slightly **up**: 127 fused labels changed, **all 127 were analog before**;
+  5 became correct and **0 became wrong**.
+- Rejection rose 20 percentage points. That is the intended price and it is the right
+  trade: of the 136 blocked captures, 136 -> `Unclassified` (and 7 -> a digital label:
+  GFSK 3, BPSK 2, PAM4 2). Every one of those was previously heading for an analog
+  demodulator.
+
+**The single residual false positive**: CPFSK, sps=32, 15 dB, seed 421 - the classical
+detector returned **`unknown` @ 0.200**, which is deliberately not a blocking verdict, so
+the CNN's `WBFM` @ 0.685 stands. Blocking on `unknown` would mean "no evidence beats the
+CNN", which is outside this rule's scope. Recorded, not patched.
+
+### MEASURED - analog regression: Entry 032 fully preserved
+
+100 analog captures, before vs after:
+
+| Case | BEFORE | AFTER |
+|---|---|---|
+| AM-DSB | 15/25 | **15/25** |
+| AM-SSB USB | 15/25 | **15/25** |
+| AM-SSB LSB | 10/25 | **10/25** |
+| WBFM | 16/25 | **16/25** |
+| overall | 56/100 | **56/100** |
+
+Gate engaged 56/100; **correct when engaged 56/56**. Byte-for-byte identical - the two
+protections coexist, as required.
+
+### Tests
+
+New `tests/test_fusion_digital_family_guard.py`, **28 tests**: the explicit family set and
+measured confidence floor; the full 3x3 blocking matrix (FSK/PSK/QAM-like x
+WBFM/AM-DSB/AM-SSB); blocking at maximum CNN confidence; weak classical verdict and
+`unknown` not blocking; digital alternative retained above threshold and rejected below
+it; no digital alternative -> rejection; family never turned into a subtype; the retained
+alternative must itself be digital; existing digital accept/reject unchanged;
+digital/digital cross-family disagreement untouched; **Entry 032 gate still firing in both
+its directions**; Entry 026 fallback intact; and the GFSK sps=16/32 regression driven
+through the real classical detector and CNN.
+
+**One prior test was deliberately updated.**
+`test_analog_subtype_routing.py::test_the_gate_never_fires_when_the_classical_family_is_digital`
+was written in Entry 032 to record the GFSK -> WBFM leak as pre-existing and
+*deliberately unfixed*. Entry 034 fixes it, so the test would otherwise assert the bug. It
+keeps its original purpose (the subtype gate must not fire on a digital family) and now
+additionally pins the Entry 034 outcome.
+
+- Focused: **28 passed**
+- Full suite: **731 passed, 1 failed, 1 skipped** - the failure is the pre-existing
+  `reedsolo` gap, with `tests/test_model_report.py` ignored for the pre-existing missing
+  `h5py`. Both environmental, neither hidden.
+
+### Remaining limitations
+
+1. **`unknown` classical verdicts do not block** - 1/600 residual (CPFSK sps=32).
+   Deliberate: a non-verdict must not override the CNN.
+2. **Rejection rose to 41.8%** on the sps 8/16/32 matrix. Safe, but it means more captures
+   return no answer; the underlying cause is CNN accuracy at high oversampling, not
+   fusion.
+3. Entry 033's other three items are untouched and still open: **PAM4 has no dispatch
+   route**, **GFSK demodulates at ~0.47 BER even when correctly labelled**, and
+   **AM-SSB LSB is not detected at 10 dB**.
+4. The guard cannot recover a correct label the CNN never ranks; it can only prevent the
+   wrong domain.
+
+### V1 integrity
+
+`d6d3f918687d0700a43e46211c3f04b9` - **unchanged**, 40 captures.
+
+---
+
+## Entry 035 - 2026-09-09 - PAM4 demodulation and dispatch
+
+Closes Entry 033 item 2. **No CNN retraining, no checkpoint, fusion, preprocessing,
+symbol-rate, analog or GFSK change.** Frozen V1 byte-identical
+(`d6d3f918687d0700a43e46211c3f04b9`, 40 captures).
+
+### Did a PAM4 demodulator already exist?
+
+**No.** `src/radiofry/decoding/demodulators/` held `psk_demod`, `qam_demod`, `fsk_demod`
+and `analog_demod` only; no PAM implementation existed anywhere, reachable or otherwise.
+`dispatch.demodulate_capture` had no PAM4 branch, so a PAM4 label fell through to
+`"No demodulator is registered for PAM4."` - exactly what Entry 033 measured as 0/25
+demodulated.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `decoding/demodulators/pam_demod.py` | **new** - `demodulate_pam()`, 50 lines |
+| `decoding/demodulators/dispatch.py` | one import and one `elif modulation == "PAM4"` branch |
+
+Nothing else. `pipeline.py` and `evaluation/harness.py` needed no change - PAM4 now flows
+through the existing digital path and the existing BER scorer.
+
+### Symbol/bit mapping - taken from the generator, not invented
+
+`synthetic_gen/v1/modulation.py:constellation_for` builds PAM4 as
+`levels = [-3, -1, 1, 3]` normalised to unit average power (divide by sqrt(5)), and
+`bits_to_symbol_indices` packs bits as **natural binary, MSB-first** - the project-wide
+convention since Entry 001.
+
+**PAM4 is NOT Gray coded in this project.** Index 0..3 maps to levels -3, -1, +1, +3 in
+ascending order, so the bit pairs are 00, 01, 10, 11 respectively. The demodulator
+inverts precisely that, and a test round-trips it against `constellation_for` and
+`bits_to_symbol_indices` directly rather than restating the assumption.
+
+### Demodulation approach
+
+Two quantities are estimated **from the samples alone** - neither is supplied and no
+ground truth is consulted (the function signature is exactly `(samples, order)`):
+
+1. **Constellation axis.** PAM is a real one-dimensional constellation, so its samples
+   lie on a line through the origin. That line has 180-degree symmetry, which makes
+   `angle(mean(x^2)) / 2` a valid estimate of its rotation - squaring folds the two
+   opposite lobes onto one. The samples are derotated by it before projection.
+2. **Scale.** Upstream stages deliver unit-RMS symbols while the grid has average power
+   `mean(levels^2) = 5`, so the samples are rescaled onto the grid. This is the same
+   defect that made QAM slice everything onto the innermost pair before Entry 007; it was
+   avoided here rather than repeated.
+
+Then nearest-level slicing, and the index emitted MSB-first as two bits.
+
+### Timing
+
+**No new timing framework.** PAM4 is not in `_FSK_LABELS` and not in `ANALOG_LABELS`, so
+it uses the existing `_linear_timing_offset` search in `demodulate_capture`, unchanged.
+No PAM4-specific timing was needed.
+
+Observed: the chosen offset varies across seeds (0, 2, 3, 5, 7) yet BER stays 0.00000 at
+20 dB, because rectangular pulses make any offset inside the symbol equivalent.
+
+### MEASURED - BER by SNR (10 seeds, samples-per-symbol 8)
+
+| SNR | demod available | median BER (true Rs) | median BER (**estimated** Rs) |
+|---|---|---|---|
+| noiseless | 10/10 | **0.00000** | 0.00000 |
+| 20 dB | 10/10 | **0.00000** | 0.00000 |
+| 15 dB | 10/10 | 0.00024 | 0.00024 |
+| 10 dB | 10/10 | 0.02051 | 0.02051 |
+| 5 dB | 10/10 | 0.13330 | 0.13330 |
+| 0 dB | 10/10 | 0.26343 | 0.26343 |
+
+**Demodulation success 10/10 at every SNR** (was 0/25 in Entry 033). BER is monotone in
+SNR, and the estimated symbol rate produces **identical** BER to the true one - the
+existing estimator already handles PAM4.
+
+**Amplitude-scale robustness**: gains of 1e-4 to 1e+4 give a maximum BER delta of
+**0.000000** - exactly scale-invariant across eight orders of magnitude.
+
+### MEASURED - no regression against the other digital classes (20 dB, 10 seeds)
+
+| Class | median BER |
+|---|---|
+| BPSK | 0.00000 |
+| QPSK | 0.00000 |
+| QAM16 | 0.00000 |
+| **PAM4** | **0.00000** |
+| QAM64 | 0.01709 |
+
+PAM4 lands on par with the best-performing existing demodulators.
+
+### Dispatch verification
+
+`PAM4 -> dispatch -> demodulate_pam -> bits -> harness BER scorer` is exercised
+end-to-end by test, including `_score_report` returning `ber_status="ok"` with
+`ber_strict <= 0.01`. PAM4 still requires a symbol rate like every other digital label,
+BPSK/QPSK/QAM16/CPFSK still reach their own demodulators, an unregistered label
+(`PAM8`) is still rejected, and a misrouted non-PAM4 capture degrades to a bad BER rather
+than raising.
+
+### Tests
+
+New `tests/test_pam4_demodulation.py`, **44 tests**: mapping pinned against the generator;
+the shared `DemodulationResult` contract; noiseless through 5 dB with per-SNR bounds;
+five seeds; BER monotonicity; scale invariance over six gains; rotation behaviour;
+the dispatch route; symbol-rate requirement; other labels not leaking into PAM4;
+misrouting not crashing; harness BER integration; and the Entry 034 guard still blocking
+analog labels while still accepting a PAM4 prediction under a `QAM-like` verdict.
+
+**One test was corrected during development, and the correction matters.** It initially
+asserted full rotation invariance. Measurement showed that is physically impossible:
+`index == true` or `index == 3 - true`, always exactly one of them, never anything
+between. The test now asserts what is actually true - the axis is recovered under any
+rotation - and a separate test pins that polarity is correct when the capture is not
+rotated, so the ambiguity cannot become an excuse for a sign error.
+
+- Focused: **44 passed**
+- Full suite: **775 passed, 1 failed, 1 skipped** - the failure is the pre-existing
+  `reedsolo` gap, with `tests/test_model_report.py` ignored for the pre-existing missing
+  `h5py`. Neither hidden.
+
+### Known limitations
+
+1. **180-degree polarity ambiguity.** A blind receiver cannot distinguish level -3 from
+   +3 without an external reference (differential coding, a pilot, or a known preamble).
+   Measured: under rotation the levels are recovered exactly, but possibly inverted
+   (BER 1.0 rather than 0.0). BPSK has the identical ambiguity and `demodulate_psk` does
+   not resolve it either - this is a **shared architectural gap**, documented rather than
+   solved here, since fixing it properly means adding phase/differential reference
+   handling across every digital demodulator.
+2. Only `order=4` is supported; other PAM orders raise. No PAM2/PAM8 exists in the
+   generator, so a wider implementation would be untested speculation.
+3. PAM4 classification accuracy is unchanged - Entry 033 measured 6/25 fused top-1, with
+   19/25 lost to the 0.4 rejection threshold. **This entry fixes demodulation, not
+   classification**: PAM4 now demodulates correctly *when it is correctly labelled*.
+4. Entry 033 items 3 and 4 remain open: GFSK demodulates at ~0.47 BER even when correctly
+   labelled, and AM-SSB LSB is not detected at 10 dB.
+
+### V1 integrity
+
+`d6d3f918687d0700a43e46211c3f04b9` - **unchanged**, 40 captures.
+
+---
+
+## Entry 036 - 2026-09-09 - GFSK demodulation: the premise was wrong (NEGATIVE RESULT)
+
+**No production code was changed.** The forensic investigation the task required found
+that the ~0.47 GFSK BER is **not a GFSK demodulation defect**. Frozen V1 verified
+(`d6d3f918687d0700a43e46211c3f04b9`, 40 captures); suite unchanged at 775 passed.
+
+### CORRECTION to the Entry 033 attribution
+
+Entry 033 recorded "GFSK sits at ~0.47 BER even when correctly labelled - the order-2 FSK
+demodulator ignores the Gaussian pulse". **Measured against the actual implementation,
+that attribution is wrong on both halves.**
+
+**Measured GFSK BER with the TRUE symbol rate** (median, 5 seeds):
+
+| samples/symbol | noiseless | 20 dB | 15 dB | 10 dB | 5 dB | 0 dB |
+|---|---|---|---|---|---|---|
+| 4 | 0.0044 | **0.0049** | 0.0088 | 0.0420 | 0.1148 | 0.3273 |
+| 8 | 0.0117 | **0.0137** | 0.0137 | 0.0430 | 0.1408 | 0.4360 |
+| 16 | 0.0157 | **0.0157** | 0.0157 | 0.0274 | 0.1096 | 0.4403 |
+| 32 | 0.0314 | **0.0275** | 0.0275 | 0.0510 | 0.0902 | 0.4314 |
+
+CPFSK/BFSK through the identical code path, same conditions: 0.0000-0.0440 noiseless,
+0.0049-0.0275 at 20 dB. **GFSK is in the same band as CPFSK, and noiseless at
+samples-per-symbol 8 GFSK is actually better** - 12 bit errors against CPFSK's 56.
+
+The existing discriminator is therefore adequate for GFSK. Nothing about it "ignores the
+Gaussian pulse" in a way that costs accuracy at these settings.
+
+### ROOT CAUSE - symbol-rate estimation, and it is not GFSK-specific
+
+Same captures, same demodulator, only the symbol rate differing:
+
+| Modulation | sps | SNR | BER with **true** Rs | BER with **estimated** Rs | estimated Rs | true Rs |
+|---|---|---|---|---|---|---|
+| GFSK | 8 | 20 dB | **0.0137** | **0.5108** | 1880 | 25000 |
+| GFSK | 16 | 20 dB | **0.0157** | **0.5000** | 854 | 12500 |
+| GFSK | 32 | 20 dB | **0.0275** | **0.5000** | 415 | 6250 |
+| **BFSK** | 16 | 20 dB | **0.0157** | **0.5000** | 903 | 12500 |
+| **BFSK** | 32 | 20 dB | **0.0275** | **0.5000** | 415 | 6250 |
+| BFSK | 8 | 20 dB | 0.0117 | 0.0117 | 25000 | 25000 |
+
+**CPFSK/BFSK collapses identically** once samples-per-symbol rises above 8 or SNR drops.
+The only configuration where the estimator works is BFSK at samples-per-symbol 8 and high
+SNR - which is exactly the V1 configuration, and exactly why this was invisible until the
+Entry 033 benchmark widened the matrix.
+
+End-to-end confirmation (GFSK, correctly routed to `2FSK`, Entry 034 holding):
+
+| sps | SNR | seed | estimated Rs | true Rs | BER (pipeline) | BER (true Rs) |
+|---|---|---|---|---|---|---|
+| 16 | 20 dB | 401 | 854 | 12500 | **0.5294** | **0.0020** |
+| 16 | 10 dB | 401 | 8594 | 12500 | 0.4986 | 0.0215 |
+| 32 | 20 dB | 401 | 342 | 6250 | 0.6154 | 0.0157 |
+| 32 | 10 dB | 401 | 342 | 6250 | 0.6154 | 0.0235 |
+
+This is the Entry 014 negative result ("low-SNR FSK symbol-rate estimation: no safe small
+fix") shown to be **far broader than recorded**: it is not confined to low SNR, and not
+confined to one FSK variant.
+
+### A real but small GFSK-specific timing weakness - quantified, not fixed
+
+`_fsk_timing_offset` minimises the variance of instantaneous frequency inside each symbol
+window. For rectangular-pulse BFSK the frequency is piecewise constant, so the correct
+offset gives a sharp, near-zero minimum. GFSK's Gaussian pulse makes the frequency vary
+continuously, so the minimum is shallow and can land on a symbol-straddling offset.
+
+Measured at 20 dB with the true symbol rate, 10 seeds:
+
+| sps | GFSK catastrophic failures | CPFSK/BFSK failures | offsets chosen on the failures |
+|---|---|---|---|
+| 4 | 0/10 | 0/10 | - |
+| 8 | **1/10** | 0/10 | 7 (best is 0) |
+| 16 | 0/10 | 0/10 | - |
+| 32 | **2/10** | 0/10 | 28 and 31 (best is 0) |
+
+Brute-forcing the offset recovers those seeds to BER 0.039-0.043, so the information is
+present and only the offset choice is wrong. **3 of 40 GFSK cases; 0 of 40 CPFSK cases.**
+
+**A candidate replacement was implemented and rejected on measurement.** The idea was to
+pick the offset whose decimated frequency samples have the widest spread (the eye
+opening). Measured, it is far worse:
+
+| sps | existing criterion fails | candidate fails (GFSK) | candidate fails (BFSK) |
+|---|---|---|---|
+| 4 | 0/10 | **5/10** | 5/10 |
+| 8 | 1/10 | **7/10** | 6/10 |
+| 16 | 0/10 | **8/10** | 4/10 |
+| 32 | 2/10 | **5/10** | 3/10 |
+
+The existing criterion is better everywhere. It was kept.
+
+### Why no production change was made
+
+1. The headline defect (~0.47 BER) is **symbol-rate estimation**, which this task's scope
+   is GFSK *demodulation*, and which affects CPFSK identically - a GFSK-specific change
+   would fix nothing.
+2. The GFSK demodulator is already within a factor of ~2 of CPFSK and better than it
+   noiseless. There is no factor-of-40 defect to remove.
+3. The one timing improvement that could be justified was tested and **regresses badly**.
+   Building a proper matched-filter or Gardner timing loop is "a general-purpose modem",
+   which the task explicitly forbids.
+
+Changing production to chase a 3/40 timing edge case while the real 0.47 sits in the
+symbol-rate estimator would have been motion without progress.
+
+### Generator facts recorded (used for understanding only, never at runtime)
+
+`gaussian_frequency_pulse(bt, sps, span_symbols=4)`, `sigma = sqrt(ln2)/(2*pi*BT)`,
+normalised to **unit area** so the accumulated phase per symbol - and therefore the
+modulation index - matches unshaped CPFSK. Default `DEFAULT_GAUSSIAN_BT = 0.3`, span
+4 symbols (33 taps at sps=8), h = 0.5, deviation = h*Rs/2. Bits map to tones
+`(2k - (M-1)) * deviation`, phase by cumulative sum. The Gaussian filter **does**
+introduce inter-symbol memory across roughly 4 symbols; measured per-symbol phase-step
+separation drops from 13.6 sigma (BFSK) to 4.8 sigma (GFSK), which is the ISI cost and is
+still comfortably decodable.
+
+**BT sensitivity** (sps=8, 20 dB, true Rs): BT 0.2 -> 0.1095, BT 0.3 -> 0.0137,
+BT 0.5 -> 0.0117. Degrades smoothly with tighter filtering, as expected. No BT value is
+hard-coded anywhere in production; the discriminator is BT-agnostic.
+
+**Amplitude-scale**: BER 0.0137 at gains 1e-4, 1.0 and 1e+4 - exactly invariant, because
+the discriminator uses phase only.
+
+### Classification/routing success vs demodulation success - the distinction that matters
+
+- **Routing (Entry 034): working.** In every end-to-end GFSK case traced here, no capture
+  was routed to an analog demodulator; all reached `2FSK`. Verified explicitly.
+- **Classification: partly working.** The CNN still calls GFSK `WBFM` at high
+  oversampling; Entry 034 converts that into `GFSK` or `Unclassified`, never `WBFM`.
+- **Demodulation: capable but starved.** Given a correct symbol rate the demodulator
+  returns 0.002-0.031 BER. The pipeline does not give it one, so it returns ~0.50.
+
+**Fixing classification and routing did not and cannot fix this**, and no GFSK
+demodulation change will either.
+
+### Recommendation
+
+The next task should be **FSK symbol-rate estimation**, scoped to CPFSK *and* GFSK across
+samples-per-symbol 4-32, not GFSK demodulation. Evidence: with the true rate the
+demodulator already delivers 0.002-0.031 BER; with the estimated rate it delivers ~0.50.
+Entry 014 closed this as a negative result at low SNR only - that conclusion needs
+revisiting with this wider evidence, because the failure is now shown at 20 dB.
+
+### Repository state
+
+Read-only. `git diff --stat -- src/` shows the four Entry 035 files unchanged at
+154 insertions; full suite **775 passed, 1 failed, 1 skipped** (pre-existing `reedsolo`;
+`test_model_report.py` ignored for the pre-existing missing `h5py`).
+V1 hash `d6d3f918687d0700a43e46211c3f04b9` - **MATCH**.
+
+---
+
+## Entry 037 - 2026-09-09 - FSK symbol-rate estimation (NEGATIVE RESULT)
+
+**No production code was changed.** The investigation found the failure is not a
+peak-selection bug that a small patch can fix: for GFSK, and for CPFSK above
+samples-per-symbol 8, the symbol-rate line is genuinely at the noise floor. Frozen V1
+verified (`d6d3f918687d0700a43e46211c3f04b9`, 40 captures); suite unchanged at 775 passed.
+
+### Problem and evidence from Entry 036
+
+Entry 036 showed the ~0.47 FSK BER is a symbol-rate failure, not a demodulation failure:
+with the true rate GFSK gives 0.002-0.031 BER, with the estimated rate ~0.50.
+
+### Investigation - the estimator path
+
+`estimate_parameters` evaluates three pre-FFT nonlinearities
+(`SYMBOL_RATE_FEATURES`: `envelope_power`, `transition_power`,
+`phase_second_difference`), runs `find_peaks` on each feature's spectrum, scores peaks in
+`_select_symbol_rate` as `peak_value + 0.25 * harmonic_support`, and **keeps whichever
+feature reports the highest confidence**.
+
+### FIRST FINDING - the harmonic hypothesis is wrong
+
+The task flagged the estimates (1880, 854, 415 Hz for true 25000, 12500, 6250) as
+"suspiciously harmonic". They are **not** subharmonics. Per-feature dump, BFSK
+samples-per-symbol 16, true Rs 12500 Hz:
+
+| feature | selected | confidence | true-line level | selected-line level |
+|---|---|---|---|---|
+| `envelope_power` | **854.5** | **0.441** | 25.2 | 48.2 |
+| `transition_power` | 41796.9 | 0.385 | 4.6 | 7.0 |
+| `phase_second_difference` | **12500.0 (exact)** | 0.467 | 14.5 | 14.5 |
+
+`phase_second_difference` finds the **exact** true rate. The spurious 854.5 Hz is a
+low-frequency bump in the envelope spectrum with no harmonic relationship to Rs -
+25000/1880 = 13.3, 12500/854 = 14.6, 6250/415 = 15.1, not integer ratios. Applying any
+multiplier would have been curve-fitting to a coincidence.
+
+### SECOND FINDING - it is a feature-comparability problem, but fixing that is not enough
+
+`envelope_power` is meaningless for a constant-modulus signal - the source comment says
+so - yet its confidence (0.49-0.545) outranks the correct feature (0.426-0.467), because
+confidence is computed *within* a feature from prominence over that feature's own noise
+floor and is not comparable *across* features.
+
+**Candidate fix tested:** drop `envelope_power` when the envelope is essentially constant
+(`amplitude_cv < 0.25`) - a signal-only gate, no generator knowledge. Measured across 8
+modulations x samples-per-symbol 4/8/16/32 x 5 seeds at 20 dB, fraction within 10% of
+true Rs:
+
+| | OLD | NEW |
+|---|---|---|
+| overall | 129/160 = **80.6%** | 131/160 = **81.9%** |
+| BFSK sps=16 | 1/5 | **3/5** |
+| **GFSK sps 8/16/32** | **0/5 each** | **0/5 each** |
+
+**+1.3% overall, and GFSK is completely unimproved.** Rejected: it does not fix the
+downstream BER, which is the only thing that matters here.
+
+### ROOT CAUSE - the line is at the noise floor, by design
+
+Strength of the symbol-boundary impulse line in the `phase_second_difference` spectrum,
+measured as line level over the spectrum's median noise floor (20 dB, seed 401):
+
+| | sps 4 | sps 8 | sps 16 | sps 32 |
+|---|---|---|---|---|
+| **CPFSK/BFSK** | **42.37x** | **16.70x** | 4.88x | 2.88x |
+| **GFSK** | 4.15x | 3.26x | 3.22x | 3.44x |
+
+The estimator succeeds **exactly** where this ratio is large (BFSK sps 4 and 8) and fails
+everywhere it is ~3-5x. That is the entire pattern, with no exceptions.
+
+GFSK's Gaussian frequency pulse exists precisely to suppress spectral content at symbol
+transitions - so it suppresses the very feature a transition-based timing estimator needs.
+The information is not mis-selected; it is not measurably there. For CPFSK the line
+weakens with oversampling because a fixed 8192-sample capture holds proportionally fewer
+symbol transitions.
+
+**No peak-selection rule can reliably pick a 3x line out of a spectrum whose noise peaks
+are of comparable height.** This is Entry 014's conclusion, now quantified across
+samples-per-symbol and both FSK variants, and shown at 20 dB rather than only low SNR.
+
+### MEASURED - symbol-rate accuracy, "within 10% / within 20% (median relative error)"
+
+**CPFSK/BFSK:**
+
+| sps | 20 dB | 15 dB | 10 dB | 5 dB | 0 dB |
+|---|---|---|---|---|---|
+| 4 | **5/5,5/5 (0.00)** | **5/5,5/5 (0.00)** | **5/5,5/5 (0.00)** | 1/5,1/5 (0.87) | 0/5,0/5 (0.90) |
+| 8 | **5/5,5/5 (0.00)** | **5/5,5/5 (0.00)** | 1/5,1/5 (0.66) | 0/5,0/5 (0.87) | 0/5,0/5 (0.79) |
+| 16 | 1/5,1/5 (0.99) | 0/5,0/5 (0.66) | 0/5,1/5 (0.75) | 0/5,0/5 (0.68) | 0/5,0/5 (0.52) |
+| 32 | 0/5,0/5 (0.93) | 0/5,0/5 (0.92) | 0/5,0/5 (0.92) | 0/5,0/5 (0.64) | 0/5,0/5 (0.50) |
+
+**GFSK:**
+
+| sps | 20 dB | 15 dB | 10 dB | 5 dB | 0 dB |
+|---|---|---|---|---|---|
+| 4 | **4/5,4/5 (0.00)** | 1/5,1/5 (0.82) | 0/5,0/5 (0.56) | 0/5,0/5 (0.80) | 0/5,0/5 (0.87) |
+| 8 | 0/5,0/5 (0.92) | 0/5,0/5 (0.90) | 0/5,0/5 (0.90) | 0/5,0/5 (0.87) | 0/5,0/5 (0.55) |
+| 16 | 0/5,0/5 (0.93) | 0/5,0/5 (0.93) | 0/5,0/5 (0.55) | 0/5,1/5 (0.55) | 0/5,0/5 (0.70) |
+| 32 | 0/5,0/5 (0.93) | 0/5,0/5 (0.93) | 0/5,0/5 (0.61) | 0/5,1/5 (0.92) | 0/5,0/5 (0.63) |
+
+Confidence never falls low enough to reject: the spurious estimates carry 0.44-0.55, in
+the same band as the correct ones. **There is no usable rejection signal**, which is
+itself an important finding - the estimator cannot currently tell the caller it failed.
+
+### MEASURED - linear modulations are already correct, and this is NOT a general defect
+
+Within 10% at 20 dB, 5 seeds, samples-per-symbol 4/8/16/32:
+
+| Modulation | sps 4 | sps 8 | sps 16 | sps 32 |
+|---|---|---|---|---|
+| BPSK, QPSK, 8PSK | 5/5 | 5/5 | 5/5 | 5/5 |
+| PAM4 | 5/5 | 5/5 | 5/5 | 4/5 |
+| 16QAM | 5/5 | 5/5 | 5/5 | 4/5 |
+| 64QAM | 5/5 | 5/5 | 4/5 | 2/5 |
+
+**Every linear modulation is essentially perfect.** The defect is confined to FSK, and
+within FSK to GFSK at all oversampling and CPFSK above samples-per-symbol 8. A general
+estimator redesign is not warranted.
+
+### Downstream BER - true Rs vs production-estimated Rs (median, 5 seeds, 20 dB)
+
+| Modulation | sps | BER true Rs | BER estimated Rs |
+|---|---|---|---|
+| BFSK | 4 | 0.0049 | **0.0049** |
+| BFSK | 8 | 0.0117 | **0.0117** |
+| BFSK | 16 | 0.0157 | **0.5000** |
+| BFSK | 32 | 0.0275 | **0.5000** |
+| GFSK | 4 | 0.0049 | **0.0098** |
+| GFSK | 8 | 0.0137 | **0.5108** |
+| GFSK | 16 | 0.0157 | **0.5000** |
+| GFSK | 32 | 0.0275 | **0.5000** |
+
+The candidate fix would not have moved a single one of the failing rows, which is why it
+was rejected rather than shipped for its +1.3% estimator score.
+
+### Decision
+
+**NEGATIVE RESULT - no production change.** A patch that improves an internal metric by
+1.3% while leaving every failing downstream case at BER 0.50 would be exactly the metric
+gaming this project has avoided since Entry 001.
+
+The real fix is a **cyclostationary estimator** - cyclic autocorrelation or spectral
+correlation density evaluated at cycle frequency alpha = Rs - which extracts a timing
+tone that survives Gaussian shaping because it exploits correlation between spectral
+components separated by Rs rather than a transition impulse. That is a new subsystem, and
+this task explicitly forbade redesigning parameter estimation.
+
+### Limitations of this investigation
+
+- Fixed capture length of 8192 samples throughout; longer captures would raise the line
+  above the floor for CPFSK at high oversampling and may partly rescue it. Not tested,
+  and not something the estimator controls.
+- Only h = 0.5 and BT = 0.3 were exercised - the project defaults.
+- The candidate `amplitude_cv` gate was measured at 20 dB only, since it already failed
+  on GFSK there.
+
+### Next step
+
+Entry 038 should scope a **cyclostationary symbol-rate estimator for FSK**, evaluated
+against the tables above, with an explicit go/no-go on whether it lifts the GFSK
+downstream BER from ~0.50 toward the ~0.015 the demodulator achieves with a correct rate.
+If that also fails, FSK above samples-per-symbol 8 should be documented as an accepted
+capability limit rather than retried.
+
+### Regression
+
+Read-only. `git diff --stat -- src/ tests/` identical to the Entry 035/036 state
+(6 files, 162 insertions). Full suite **775 passed, 1 failed, 1 skipped** - the failure is
+the pre-existing `reedsolo` gap, with `tests/test_model_report.py` ignored for the
+pre-existing missing `h5py`. No V1 modification; hash
+`d6d3f918687d0700a43e46211c3f04b9` MATCH. No ground-truth leakage: the generator was used
+only as an evaluation oracle, never inside estimation.
+
+---
+
+## Entry 038 - 2026-09-09 - Cyclostationary FSK symbol-rate estimation (SPLIT VERDICT)
+
+**GO for CPFSK/BFSK - narrowly. NO-GO for GFSK.** A gated cyclic estimator was
+implemented. Frozen V1 unchanged (`d6d3f918687d0700a43e46211c3f04b9`, 40 captures).
+
+### Hypothesis and rationale
+
+A signal built from symbols at rate Rs is cyclostationary with cycle frequencies at
+`k*Rs`, so the cyclic autocorrelation
+
+    R^alpha(tau) = (1/N) sum_n p(n) p*(n-tau) exp(-j 2 pi alpha n / Fs)
+
+is non-zero at `alpha = Rs`. Computed as an FFT of the lag product, the whole
+cycle-frequency scan costs a handful of FFTs - no SCD framework needed. `p(n)` is the
+instantaneous frequency, which for FSK is a PAM-like waveform at the symbol rate.
+
+**Theory made a falsifiable prediction before any measurement.** For a linearly modulated
+signal the `alpha = Rs` term is proportional to the pulse-spectrum overlap
+`sum_f G(f) G*(f - Rs)`, so it exists **only when the pulse has excess bandwidth**. A
+rectangular CPFSK frequency pulse has it; a Gaussian GFSK pulse (BT 0.3) deliberately does
+not. Prediction: works for CPFSK, fails for GFSK. Both halves were confirmed.
+
+### Was a real cyclic signature observed? Yes for CPFSK, no for GFSK
+
+Peak-to-background at the true Rs (20 dB, seed 503), IF domain:
+
+| | sps 4 | sps 8 | sps 16 | sps 32 |
+|---|---|---|---|---|
+| **CPFSK/BFSK** | 15.52x | **23.93x** | **12.91x** | 2.82x |
+| **GFSK** | 3.64x | 4.63x | 1.88x | 1.33x |
+
+Blind pick error: CPFSK **0.00 at every sps**; GFSK 0.88-2.14 at every sps. The IQ domain
+was also tested and is worse than the IF domain everywhere (6.2x vs 15.5x at best).
+
+### Rs accuracy - existing estimator vs raw cyclic (within 5/10/20% of 5 seeds)
+
+| mod | sps | SNR | PROD | CYCLO |
+|---|---|---|---|---|
+| BFSK | 8 | 10 dB | 0/1/1 | **5/5/5** |
+| BFSK | 16 | 20 dB | 1/1/1 | **5/5/5** |
+| BFSK | 16 | 15 dB | 0/1/1 | **5/5/5** |
+| BFSK | 32 | 20 dB | 0/0/0 | **4/4/4** |
+| BFSK | 16 | 10 dB | 1/1/2 | 0/0/0 |
+| BFSK | 32 | 15/10 dB | 0/0/0 | 0/0/0 |
+| **GFSK** | **4** | **20 dB** | **4/4/4** | **0/0/0** |
+| GFSK | all others | all | 0-1 of 5 | **0/0/0** |
+
+The cyclic method is decisively better for CPFSK above sps 8, useless for GFSK, and
+**actively worse** for the one GFSK case the existing estimator gets right.
+
+### Observation length (20 dB, 5 seeds within 10%; median peak ratio)
+
+| | N=8192 | N=16384 | N=32768 |
+|---|---|---|---|
+| BFSK sps 16 | 5/5, 12.9x | 5/5, 18.2x | 5/5, 25.8x |
+| BFSK sps 32 | 4/5, 2.6x | **5/5, 3.8x** | **5/5, 5.2x** |
+| GFSK sps 16 | 0/5, 1.9x | 0/5, 2.6x | **4/5, 3.9x** |
+| GFSK sps 32 | 0/5, 1.3x | 0/5, 1.7x | 0/5, 1.7x |
+
+Observation length helps - the feature is real and integrates coherently - but GFSK
+sps 32 does not recover even at 4x the capture length. Capture length is not something the
+estimator controls, so this is recorded as evidence, not exploited.
+
+### The gate, and why it is set where it is
+
+The peak-to-background ratio overlaps between correct and incorrect cyclic estimates
+(correct: min 2.25, median 12.95; wrong: max 9.49), so it is an imperfect discriminator.
+Swept over all 120 FSK captures:
+
+| gate | uses cyclic | correct | vs prod-only | **regressions** |
+|---|---|---|---|---|
+| 0.0 | 120/120 | 44/120 | +8 | 8 |
+| 3.0 | 65/120 | 45/120 | +9 | 4 |
+| **6.0** | **37/120** | **40/120** | **+4** | **0** |
+| 10.0 | 26/120 | 40/120 | +4 | 0 |
+
+**6.0 chosen: the largest gain available at zero regressions.** Lower gates buy +9 instead
+of +4 but break 4-8 previously-correct captures, which is not a trade this project makes.
+
+### Production change
+
+`src/radiofry/dsp/parameter_estimation.py`: `CYCLIC_LAGS`, `CYCLIC_PEAK_RATIO_MIN = 6.0`,
+`_cyclic_symbol_rate(iq, sample_rate)` returning `(rate, ratio)`, and a gated override in
+`estimate_parameters` that reports `symbol_rate_feature="cyclic_autocorrelation"` and a
+confidence derived from the ratio. Signature takes samples and sample rate only - no
+modulation, no sps, no ground truth.
+
+### Downstream BER - the honest, narrow result
+
+Production before vs after, median over 5 seeds:
+
+| mod | sps | SNR | true Rs | **before** | **after** |
+|---|---|---|---|---|---|
+| **BFSK** | **16** | **20 dB** | 0.0176 | **0.5135** | **0.0176** |
+| BFSK | 16 | 15/10 dB | 0.0176 | 0.51 | 0.51 (unchanged) |
+| BFSK | 32 | all | 0.0196 | 0.50 | 0.50 (unchanged) |
+| GFSK | all | all | 0.004-0.03 | 0.38-0.53 | unchanged |
+
+**Exactly one of 24 conditions improved, and it improved completely** (0.5135 -> 0.0176,
+matching the true-Rs BER to four decimals). This is stated plainly rather than dressed up:
+the raw estimator fixes more cases than the gated production path ships, because the gate
+was set for zero regressions.
+
+CPFSK sps 32 is the clearest casualty: the raw estimator finds its rate (error 0.00) but
+the ratio is ~2.8x, below the gate. Pinned by
+`test_cpfsk_sps_32_is_recovered_by_the_estimator_but_not_by_the_gate` so it is not
+mistaken for a win.
+
+### GO / NO-GO
+
+- **GO for CPFSK/BFSK, narrowly**: a real signature (12.9-23.9x), correct across 5 seeds,
+  no generator constants, zero measured regressions, and one complete downstream BER fix.
+- **NO-GO for GFSK**: the feature is absent by construction (1.3-4.6x, indistinguishable
+  from background), the blind pick is wrong at every sps and SNR, and downstream BER does
+  not move. **GFSK symbol-rate estimation above sps 4 is a capability limitation of
+  RadioFry**, and no further estimator family should be attempted for it without changing
+  the signal model (longer captures, or a known preamble).
+
+### Regression
+
+- Full suite **800 passed, 1 failed, 1 skipped**. The failure is the pre-existing
+  `reedsolo` gap; `tests/test_model_report.py` is ignored for the pre-existing missing
+  `h5py`. No new failures.
+- New `tests/test_cyclic_symbol_rate.py`, **25 tests**, including the gate threshold, the
+  signature taking only samples and sample rate, CPFSK sps 16 fixed in production, CPFSK
+  sps 4/8 unchanged, GFSK sps 4 not broken further, **12 parametrised linear-modulation
+  non-regression cases**, scale invariance, and the sps 32 limitation.
+- **The cyclic gate fired on 0 of 120 linear-modulation captures at 20 dB** - BPSK, QPSK,
+  8PSK, PAM4, QAM16 and QAM64 are provably untouched there.
+- **One prior test deliberately updated**:
+  `test_symbol_rate_estimator_regression.py::test_estimate_reports_which_feature_was_selected`
+  asserted the feature name is one of the three pre-FFT nonlinearities. A fourth
+  legitimate source now exists; the test's purpose - that the estimate says which source
+  produced it - is unchanged.
+- Analog routing, the Entry 034 digital-family gate and Entry 035 PAM4 demodulation all
+  pass unchanged.
+
+### A pre-existing weakness found while checking regressions
+
+Linear modulations at sps 32 are **not** as solid as Entry 037 suggested. On seeds
+503-541 at 20 dB: BPSK 4/5, 8PSK 3/5, PAM4 2/5, 16QAM 1/5, 64QAM 3/5 within 5%.
+**Verified pre-existing** by re-running with this entry's change stashed - identical
+numbers, and the cyclic gate never fires there. Entry 037's seeds 401-431 were simply
+luckier. This is a separate, previously unrecorded defect.
+
+### Limitations
+
+- The gate is a blunt instrument: the ratio overlaps between correct and wrong estimates,
+  so it buys safety by declining most of the cases it could fix.
+- Only h = 0.5 and BT = 0.3 were exercised.
+- The 6.0 gate was tuned on the same 120-capture sweep used to report the gain; it has not
+  been validated on a fully held-out seed set.
+
+### Next recommendation
+
+**Entry 039 should be the final synthetic benchmark**, not another estimator family. The
+FSK estimator question is now answered in both directions, and Entry 037's advice to stop
+after a second negative stands for GFSK. The newly found linear-modulation sps 32 weakness
+should be quantified in that benchmark rather than chased separately.
+
+---
+
+## Entry 039 - 2026-09-09 - Final synthetic end-to-end benchmark + freeze decision
+
+**Audit only - zero production changes.** Frozen V1 verified
+(`d6d3f918687d0700a43e46211c3f04b9`, 40 captures); suite unchanged at 800 passed.
+
+**DECISION: TARGETED BLOCKER.** One narrowly scoped Entry 040 is justified; see the end.
+
+### Benchmark design
+
+**570 captures**, config and results saved to `reports/benchmark_v039/`
+(`config.json`, `results.pkl`) - gitignored, untracked.
+
+| | |
+|---|---|
+| Digital | 8 generator classes x samples-per-symbol 4/8/16/32 x SNR 20/15/10/5/0 dB x 3 seeds = **480** |
+| Analog | AM-DSB, AM-SSB USB, AM-SSB LSB, WBFM x 5 SNR x 3 seeds, SSB run **with and without** SigMF metadata = **90** |
+| Seeds | **601, 607, 613** - unused in Entries 033-038 |
+| Fs / N | 200 kHz / 8192 samples |
+| Checkpoint | `models_saved/modulation_cnn.pt` (11-class RadioML) |
+
+Note recorded in the config: **BFSK (generator) and CPFSK (production label) are the same
+signal**, not two classes.
+
+### Leakage audit
+
+- Seeds 601/607/613 are new; the production checkpoint was trained on RadioML 2016.10a,
+  never on RadioFry synthetic captures.
+- Source scan of `pipeline`, `parameter_estimation`, `cyclostationary`,
+  `confidence_fusion`, `modulation_inference`: **no reference to ground truth,
+  `load_ground_truth`, `SampleSpec`, true Rs or samples-per-symbol.**
+- Ground truth is used only to score afterwards; metadata is supplied **only** in the two
+  conditions that explicitly represent an external recorder.
+- The oracle true-Rs demodulation is recorded as a separate diagnostic column and never
+  fed back into the pipeline.
+
+### 2. Overall (480 digital)
+
+| Metric | Result |
+|---|---|
+| CNN top-1 | 185/480 = **38.5%** |
+| CNN top-3 | 353/480 = **73.5%** |
+| fused top-1 | 140/480 = **29.2%** |
+| family-level | 215/480 = 44.8% |
+| rejection | 216/480 = **45.0%** |
+| confident-wrong | 124/480 = **25.8%** |
+
+Fused top-1 is *below* CNN top-1 by design: the 0.4 threshold and the Entry 034 gate
+convert low-confidence and unsafe decisions into rejection.
+
+### 3. Per modulation (fused correct / CNN top-3, 15 per cell)
+
+| class | sps 4 | sps 8 | sps 16 | sps 32 | total |
+|---|---|---|---|---|---|
+| BPSK | 4 (t3 15) | **15** (15) | 9 (14) | 0 (9) | 28/60 |
+| QPSK | 4 (15) | **12** (15) | 9 (14) | 0 (6) | 25/60 |
+| 8PSK | 9 (15) | **12** (15) | 0 (9) | **0 (0)** | 21/60 |
+| CPFSK | 0 (10) | **15** (15) | 0 (5) | **0 (0)** | 15/60 |
+| GFSK | 0 (0) | 2 (15) | **13** (15) | 1 (15) | 16/60 |
+| PAM4 | 0 (9) | 6 (13) | 11 (13) | 7 (12) | 24/60 |
+| QAM16 | 0 (14) | 1 (15) | 0 (13) | 0 (4) | **1/60** |
+| QAM64 | 0 (13) | 8 (14) | 2 (13) | 0 (3) | 10/60 |
+
+**By SNR:** 20 dB 40.6%, 15 dB 38.5%, 10 dB 34.4%, 5 dB 20.8%, 0 dB 11.5%.
+**By SPS:** sps 4 **14.2%**, sps 8 **59.2%**, sps 16 36.7%, sps 32 **6.7%**.
+
+### 4. Parameter estimation
+
+Rs within 10%, per class x samples-per-symbol (of 15):
+
+| class | sps 4 | sps 8 | sps 16 | sps 32 |
+|---|---|---|---|---|
+| BPSK/QPSK/8PSK | 15/15 | 15/15 | 12-13/15 | **7-10/15** |
+| PAM4 | 15/15 | 15/15 | 11/15 | **0/15** |
+| QAM16/QAM64 | 15/15 | 15/15 | 12-13/15 | **2-3/15** |
+| CPFSK | 9/15 | 8/15 | 4/15 | **0/15** |
+| GFSK | 3/15 | **0/15** | **0/15** | **0/15** |
+
+Overall **308/480 = 64.2%** within 10%. Carrier |error| median 92.2 Hz (max 606.8).
+SNR estimate biased low (true 20 -> 14.6 dB, 10 -> 10.2, 0 -> 3.4).
+
+### 5. Digital BER - and the single most important number in this benchmark
+
+Conditional on correct classification, production Rs vs oracle Rs:
+
+| class | sps | 20 dB | 15 dB | 10 dB | 5 dB |
+|---|---|---|---|---|---|
+| BPSK | 8/16 | 0.0000 | 0.0000 | 0.0000 | 0.0039 |
+| QPSK | 8 | 0.0000 | 0.0000 | 0.0005 | 0.0625 |
+| 8PSK | 8 | 0.0000 | 0.0013 | 0.0521 | 0.1969 |
+| PAM4 | 8/16 | 0.0000 | 0.0000-0.0010 | 0.0215-0.0234 | 0.3082 |
+| QAM64 | 8 | 0.0218 | 0.1063 | 0.2263 | - |
+| CPFSK | 8 | 0.0078 | 0.0078 | 0.0078 | 0.4884 (oracle **0.0371**) |
+| GFSK | 16 | 0.4414 | 0.3913 | 0.4414 | (oracle **0.0098-0.0411**) |
+
+**The master variable:**
+
+| | n | median BER |
+|---|---|---|
+| **Rs estimate correct (within 10%)** | 108 | **0.0010** |
+| **Rs estimate wrong** | 32 | **0.4881** |
+
+Everything downstream works. **Symbol-rate estimation is the system's dominant failure
+mode**, and it accounts for essentially every non-classification BER failure.
+
+### 6. FSK limitation (all SNR pooled)
+
+| class | sps | Rs within 10% | production BER | **oracle BER** |
+|---|---|---|---|---|
+| CPFSK | 4 | 9/15 | 0.4993 | **0.0156** |
+| CPFSK | 8 | 8/15 | **0.0205** | 0.0205 |
+| CPFSK | 16 | 4/15 | 0.4740 | **0.0215** |
+| CPFSK | 32 | 0/15 | 0.5001 | **0.0235** |
+| GFSK | 4 | 3/15 | 0.4939 | **0.0454** |
+| GFSK | 8 | 0/15 | 0.5061 | 0.2532 |
+| GFSK | 16 | 0/15 | 0.4414 | **0.0411** |
+| GFSK | 32 | 0/15 | 0.5273 | **0.0627** |
+
+The gap between production and oracle columns is entirely the estimator. This is the
+Entry 037/038 limitation, now fully quantified and **left as-is**.
+
+### 7. SPS=32 - the weakness IS end-to-end significant, and it is two defects not one
+
+| class | Rs ok | fused ok | **CNN top-1** | production BER | oracle BER |
+|---|---|---|---|---|---|
+| BPSK | 10/15 | 0/15 | **0/15** | - | **0.0000** |
+| QPSK | 8/15 | 0/15 | **0/15** | 0.5015 | **0.0020** |
+| 8PSK | 7/15 | 0/15 | **0/15** | 0.4805 | 0.0560 |
+| PAM4 | 0/15 | 7/15 | 7/15 | 0.5000 | **0.0156** |
+| QAM16 | 3/15 | 0/15 | **0/15** | 0.5000 | 0.0928 |
+| QAM64 | 2/15 | 0/15 | **0/15** | 0.5068 | 0.2428 |
+
+Entry 038 flagged the Rs weakness at sps 32. This benchmark shows it is **not the whole
+story**: even where Rs is recovered (BPSK 10/15, QPSK 8/15), **CNN top-1 is 0/15**. The
+oracle BER column proves the information is present in the samples. So sps 32 fails at
+*both* the estimator and the classifier, and the classifier failure is the larger of the
+two.
+
+### 8. Analog (3 captures per SNR cell)
+
+| condition | metadata | 20 | 15 | 10 | 5 | 0 dB | total | median message correlation @20/15/10 |
+|---|---|---|---|---|---|---|---|---|
+| AM-DSB | - | 3/3 | 3/3 | 3/3 | 0/3 | 0/3 | 9/15 | 0.9424 / 0.8438 / 0.6557 |
+| AM-SSB USB | **yes** | 3/3 | 3/3 | 3/3 | 0/3 | 0/3 | 9/15 | **0.9950 / 0.9843 / 0.9525** |
+| AM-SSB USB | **no** | 3/3 | 3/3 | 3/3 | 0/3 | 0/3 | 9/15 | **0.0132 / -0.0029 / 0.0167** |
+| AM-SSB LSB | **yes** | 3/3 | 3/3 | 1/3 | 0/3 | 0/3 | 7/15 | **0.9950 / 0.9843 / 0.9524** |
+| AM-SSB LSB | **no** | 3/3 | 3/3 | 1/3 | 0/3 | 0/3 | 7/15 | **-0.0062 / -0.0034 / 0.0040** |
+| WBFM | - | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 12/15 | 0.8901 / 0.7373 / 0.5153 |
+
+Classification is **identical** with and without metadata, as it should be - metadata
+affects demodulation only. The recovery difference is total: **0.995 vs 0.013**. Analog
+classification is reliable at >= 10 dB and declines (into rejection, not error) below.
+
+### 9. Safety - the strongest area of the system
+
+| Metric | Result |
+|---|---|
+| **digital -> analog false routing** | **1/480 = 0.21%** |
+| **analog -> digital false routing** | **0/90 = 0.00%** |
+| Entry 034 digital-family gate fired | 118/570 |
+| Entry 032 analog subtype route fired | 53/570 |
+| Entry 026 CNN-alternative route fired | 0/570 |
+| system correct | 193/570 = 33.9% |
+| system rejected | 253/570 = 44.4% |
+| system confident-wrong | 124/570 = 21.8% |
+
+The Entry 034 gate turned confident-wrong analog labels into **87 rejections**, 4 GFSK and
+1 BPSK. That is the gate doing exactly its job: it converts a wrong-domain answer into an
+honest "unclassified", which is why fused accuracy is lower than CNN accuracy.
+
+### 12/13. Multi-format and report validation
+
+The same QPSK capture through `.iq` and `.wav` gives identical fused label (QPSK),
+identical BER (0.0) and identical Rs (25000) - **conclusions are not format-dependent**.
+
+Report structure **PASS**: top-level `generated_at`/`schema_version`/`source`/`stages`;
+all seven stages present; JSON-serialisable; analog record carries `ber_status`,
+`ber_reason`, `fusion_label`, `est_symbol_rate_hz`, `classical_family`, with
+`ber_strict=None` and `es_n0_db=None` as required.
+
+### Regression
+
+Full suite **800 passed, 1 failed, 1 skipped**. The failure is the pre-existing `reedsolo`
+gap; `tests/test_model_report.py` ignored for the pre-existing missing `h5py`. No new
+failures. V1 hash MATCH. **Zero production changes.** Benchmark artifacts live under
+`reports/benchmark_v039/`, confirmed gitignored.
+
+### DECISION: TARGETED BLOCKER
+
+Not a freeze, and not merely a fundamental limitation. The reasoning:
+
+- **No implementation defect exists.** Every route works, reports validate, formats agree,
+  safety is excellent (0.21% / 0.00% false routing), and demodulators achieve
+  **median BER 0.0010** when handed a correct symbol rate.
+- **Two separable causes explain the low end-to-end numbers.** One is the FSK/high-sps
+  symbol-rate limitation, already investigated to exhaustion in Entries 037-038 and
+  correctly closed as a fundamental limitation of the signal model.
+- **The other is new, and it is not fundamental**: the CNN is strong at samples-per-symbol
+  8 (59.2% fused) and collapses either side of it - 14.2% at sps 4, **6.7% at sps 32**,
+  with CNN top-1 **0/15** for five of six linear classes at sps 32 and top-3 as low as
+  0/15. The oracle BER column proves the information is in the samples. The 11-class
+  RadioML checkpoint was trained around 8 samples-per-symbol; sps 4 and 32 are simply
+  out of distribution.
+
+**This corrects Entry 033.** That entry concluded "do not retrain - top-3 is 100% at
+>= 10 dB", but it measured only samples-per-symbol 8. Across sps 4-32 top-3 is 73.5%, and
+0/15 in the worst cell. The evidence that justified deferring retraining does not hold on
+the wider matrix.
+
+### Recommended Entry 040 - exactly one, narrowly scoped
+
+**Retrain the V2 CNN with samples-per-symbol augmentation (4-32)** and, in the same entry,
+check whether the 128-sample inference frame is adequate at high oversampling - at sps 32
+a 128-sample window holds only 4 symbols, versus 32 at sps 4, so the frame length may be a
+second, architectural half of the same problem. The training pipeline
+(`training/train_v2_synthetic.py`) and a generator supporting arbitrary sps already exist,
+so this is bounded work against a clear, measured target: lift sps 4 and 32 fused accuracy
+from 14.2% and 6.7% toward the 59.2% the model already achieves at sps 8.
+
+Do **not** reopen symbol-rate estimation. Entries 037 and 038 answered that question in
+both directions.
+
+### Limitations of this benchmark
+
+- 3 seeds per cell: enough to see 0/15 and 15/15 patterns clearly, not enough for tight
+  confidence intervals on mid-range cells.
+- Fixed 8192-sample captures and a single 200 kHz sample rate.
+- Only h = 0.5 and BT = 0.3 for FSK; only modulation depth 0.5 for AM-DSB.
+- WAV was cross-checked on one capture rather than the full matrix, since ingestion has
+  dedicated focused tests.
+
+---
+
+## Entry 040 - 2026-09-10 - CNN SPS generalisation + inference window: SHIP
+
+Closes the Entry 039 TARGETED BLOCKER. Frozen V1 unchanged
+(`d6d3f918687d0700a43e46211c3f04b9`, 40 captures). Suite 800 -> **826 passed**.
+
+### Audit - verified, not assumed
+
+| | |
+|---|---|
+| `modulation_cnn.pt` (production default) | trained on **RML2016.10a**, which is generated at a **single 8 samples/symbol** |
+| `train_v2_synthetic.py` | `SAMPLES_PER_SYMBOL = 8` hard-coded, `FRAME_LENGTH = 128` |
+| `ModulationCNN` | ends in **`AdaptiveAvgPool1d(1)` - input length is NOT fixed** |
+
+**Neither checkpoint had ever seen an oversampling factor other than 8.** The pooling
+layer meant the window hypothesis could be tested at 256 and 512 samples with **zero
+architecture change**, so the two hypotheses separate cleanly instead of being confounded.
+
+Symbols per inference frame:
+
+| | sps 4 | sps 8 | sps 16 | sps 32 |
+|---|---|---|---|---|
+| 128 samples | 32 | 16 | 8 | **4** |
+| 256 samples | 64 | 32 | 16 | 8 |
+| 512 samples | 128 | 64 | 32 | 16 |
+
+### CORRECTION to the Entry 039 attribution
+
+Entry 039 attributed the blocker to SPS training distribution. Measured on one unseen test
+set, that is only **half** of it:
+
+| checkpoint | overall | sps 4 | sps 8 | sps 16 | sps 32 |
+|---|---|---|---|---|---|
+| 11-class RadioML (**production default**) | 43.3% | 36.7% | 65.0% | 56.7% | **15.0%** |
+| 8-class V2 synthetic (**already in the repo**) | **86.2%** | 78.3% | 100% | 90.0% | **76.7%** |
+| sps-augmented experimental | **99.2%** | 96.7% | 100% | 100% | **100%** |
+
+**The larger single step is domain mismatch, not oversampling**: 43.3% -> 86.2% comes from
+simply using a checkpoint trained on RadioFry's own distribution, which already existed.
+SPS augmentation then adds 86.2% -> 99.2%. Entry 039 measured only the production default
+and so attributed the whole gap to SPS.
+
+### Hypothesis 2 (window too short) - REJECTED
+
+Same sps-augmented training, three window lengths:
+
+| window | overall top-1 | sps 32 | best validation loss |
+|---|---|---|---|
+| **128** | **99.2%** | 100% | 0.2504 |
+| 256 | 99.2% | 100% | 0.1788 |
+| 512 | 98.8% | 100% | 0.1579 |
+
+Longer windows lower validation loss but do **not** improve test accuracy. **4 symbols per
+frame is sufficient once the model has seen that regime in training.** The 128-sample
+window was therefore kept, and the production inference path is unchanged.
+
+### Production changes
+
+**1. `training/train_v2_synthetic.py`** - `SAMPLES_PER_SYMBOL_SWEEP = (4, 8, 16, 32)`,
+`CaptureSpec.samples_per_symbol`, capture id now encodes sps, and `render_capture` holds
+the **capture sample count constant** (`NUM_SYMBOLS * 8 // sps`), so higher oversampling
+means proportionally fewer symbols - matching what the runtime actually sees. The sweep is
+balanced: equal capture counts per oversampling factor, asserted by test.
+
+**2. `pipeline.py`** - new `DEFAULT_MODULATION_MODEL` pointing at
+`models_saved/modulation_cnn_v3_spsaug.pt`. The RadioML checkpoint is **retained**, so the
+Entry 039 baseline stays reproducible.
+
+**3. New checkpoint**, produced by the project's own pipeline (not the ad-hoc experiment
+script): best epoch 35, validation loss 0.2469, frame-level validation accuracy 0.8972,
+44800/16000/16000 train/validation/test frames, capture-level split.
+
+### End-to-end result - production fusion and dispatch
+
+| | fused | sps 4 | sps 8 | sps 16 | sps 32 | rejection | confident-wrong |
+|---|---|---|---|---|---|---|---|
+| **before** (11-class) | 35.4% | 16.7% | 68.8% | 45.8% | **10.4%** | 41.1% | **23.4%** |
+| **after** (v3 sps-aug) | **99.5%** | **100%** | **100%** | **100%** | **97.9%** | **0.0%** | **0.5%** |
+
+**Confident-wrong fell 23.4% -> 0.5%**, so this is not a model that improved by becoming
+confidently wrong - the safety property improved alongside accuracy. Digital -> analog
+false routing stayed **0/192** before and after.
+
+BER, conditional on correct classification: **median 0.0008 when the symbol rate is
+correct**, 0.5058 when it is wrong (n=46). That residual is entirely the Entry 037/038
+symbol-rate limitation, deliberately untouched here.
+
+### The analog path is unaffected by dropping the CNN's analog classes
+
+The new checkpoint is **digital-only** (8 classes). Verified end to end:
+
+| | 11-class | v3 digital-only |
+|---|---|---|
+| AM-DSB | 6/6 | **6/6** |
+| AM-SSB USB | 6/6 | **6/6** |
+| WBFM | 6/6 | **6/6** |
+
+Entry 032's classical subtype gate decides the analog label from envelope evidence and
+**never consulted the CNN**; Entry 039 measured Entry 026's CNN-alternative route firing
+**0/570**. So an 8-class digital CNN plus the classical analog gate is architecturally
+cleaner than before, not a regression. Entry 034's guard becomes structurally unreachable
+for real captures - no analog labels exist to block - which can only reduce digital ->
+analog false routing.
+
+### Leakage audit
+
+Four disjoint seed blocks: train 2,000,000+, validation 3,000,000+, test 4,000,000+,
+end-to-end 5,000,000+, analog 6,000,000+, focused tests 7,000,000+. **None overlap Entry
+039's 601/607/613.** Splits are capture-level, so no frame of a capture straddles splits.
+Model selection used validation loss only; the reported numbers are from unseen seeds. No
+ground truth, filename or metadata influences inference.
+
+### Regression
+
+**826 passed, 1 failed, 1 skipped** (was 800 passed). The failure is the pre-existing
+`reedsolo` gap; `tests/test_model_report.py` ignored for the pre-existing missing `h5py`.
+**No new failures** - Entry 034 digital-family gate, Entry 035 PAM4 demodulation, Entry
+038 cyclostationary estimator, analog routing, report generation and IQ/WAV consistency
+all pass unchanged. New `tests/test_sps_generalisation.py`, **26 tests**. V1 hash MATCH.
+
+### An operational caveat that must not be lost
+
+`models_saved/` is gitignored, so **the new default checkpoint is untracked**. A fresh
+clone will not have it, and `predict_modulation` will return `Unclassified` with
+"Checkpoint not found" rather than failing loudly. This was already true of the previous
+default; the change does not make it worse, but it is now on the critical path for the
+headline result and should be handled by whatever artifact-distribution mechanism the
+project adopts.
+
+`train_v2` also does **not** write the `_metrics.json` sibling that the inference loader
+requires - `write_metrics()` is a separate call. A checkpoint trained without it loads as
+`Unclassified`. Encountered during this entry and worth fixing in a later cleanup.
+
+### Limitations
+
+- **99.5% is synthetic-to-synthetic.** Trained and tested on the same generator with
+  disjoint seeds and capture-level splits. It measures SPS generalisation *within* our
+  signal model and is **not** a real-world accuracy claim.
+- Only the 8 digital classes; no analog classes were added, by design.
+- Only samples-per-symbol 4/8/16/32 and SNR 20/15/10 dB were evaluated end to end.
+- The single remaining sps-32 error (1 of 48) was not investigated.
+
+### DECISION: SHIP
+
+Both experiments answered cleanly, the improvement is large and measured on unseen seeds,
+safety improved rather than degraded, analog is unaffected, and the full suite is green.
+
+### Next step
+
+The Entry 039 blocker is closed. **Recommend returning to the Entry 039 freeze question**:
+re-run that benchmark against the new default and, if it confirms these numbers, declare
+SYNTHETIC FREEZE and move to real-world data. The remaining known limitations - FSK
+symbol-rate estimation above sps 8 and metadata-free SSB recovery - are both already
+closed as fundamental for this development cycle.

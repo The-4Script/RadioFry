@@ -1,6 +1,6 @@
 ANTIGRAVITY COMMIT HANDOFF
 Branch: main
-Rewritten: 2026-09-09 (Entry 023 audit; updated for Entries 024, 026-030)
+Rewritten: 2026-09-09 (Entry 023 audit; updated for Entries 024, 026-040)
 
 STATUS: NOTHING IN THIS FILE HAS BEEN COMMITTED OR PUSHED.
 This file describes the CURRENT uncommitted working-tree delta only.
@@ -22,13 +22,35 @@ UNCOMMITTED - MODIFIED TRACKED FILES
 --------------------------------------------------------------------------------
 
 Production (8):
+  src/radiofry/fusion/confidence_fusion.py      + digital-family guard: a positive
+                                                classical PSK/FSK/QAM verdict blocks a
+                                                CNN analog label; falls back to the
+                                                CNN's own digital alternative or
+                                                Unclassified (Entry 034)
+  src/radiofry/fusion/confidence_fusion.py      + select_analog_subtype(): behind the
+                                                classical analog-like gate, the subtype
+                                                comes from envelope evidence and the CNN
+                                                gets no vote (Entry 032)
+  src/radiofry/dsp/cyclostationary.py           + envelope_flatness evidence (Entry 032;
+                                                family decision unchanged)
   src/radiofry/ingestion/iq_parser.py           read a SigMF sidecar's centre
                                                 frequency into metadata (Entry 030)
   src/radiofry/ingestion/wav_parser.py          same for WAV (Entry 030)
-  src/radiofry/decoding/demodulators/dispatch.py  analog bypasses the digital
+  src/radiofry/decoding/demodulators/dispatch.py  + PAM4 route (Entry 035);
+                                                analog bypasses the digital
                                                 symbol-rate timing/decimation path;
                                                 ANALOG_LABELS + _demodulate_analog
                                                 (Entry 028). Digital untouched.
+  src/radiofry/training/train_v2_synthetic.py   SAMPLES_PER_SYMBOL_SWEEP (4,8,16,32);
+                                                CaptureSpec.samples_per_symbol; constant
+                                                capture length across the sweep (Entry 040)
+  src/radiofry/pipeline.py                      DEFAULT_MODULATION_MODEL -> the new
+                                                sps-augmented v3 checkpoint (Entry 040)
+  src/radiofry/dsp/parameter_estimation.py      gated cyclostationary symbol-rate
+                                                estimator for FSK: _cyclic_symbol_rate()
+                                                + CYCLIC_PEAK_RATIO_MIN=6.0 (Entry 038).
+                                                BFSK sps16 BER 0.51 -> 0.018; fires on
+                                                0/120 linear captures.
   src/radiofry/dsp/cyclostationary.py           positive family-level analog test:
                                                 frequency_cv < 0.9 AND no fourth-power
                                                 line, placed after FSK/PSK and before
@@ -49,14 +71,14 @@ Production (8):
                                                 for a null bits block (Entry 021)
 
 Documentation (5):
-  BANK.md                                       Entries 021-030 appended
-  OP.md                                         Runs 014-022 appended
+  BANK.md                                       Entries 021-040 appended
+  OP.md                                         Runs 014-032 appended
   ANTIGRAVITY_COMMIT.txt                        this file
-  research_memory/CURRENT.md                    rewritten (023); 024; 026-030 status
-  research_memory/INDEX.md                      Entry 017, Analog section, 023-030
+  research_memory/CURRENT.md                    rewritten (023); 024; 026-040 status
+  research_memory/INDEX.md                      Entry 017, Analog section, 023-040
 
 --------------------------------------------------------------------------------
-UNCOMMITTED - UNTRACKED FILES TO ADD (10)
+UNCOMMITTED - UNTRACKED FILES TO ADD (16)
 --------------------------------------------------------------------------------
 
   src/radiofry/ingestion/sidecar.py             minimal SigMF .sigmf-meta reader for
@@ -73,6 +95,12 @@ UNCOMMITTED - UNTRACKED FILES TO ADD (10)
   tests/test_classical_analog_detection.py      40 tests
   tests/test_analog_dispatch_bypass.py          32 tests
   tests/test_ingestion_sigmf_metadata.py        32 tests
+  tests/test_analog_subtype_routing.py          57 tests
+  tests/test_fusion_digital_family_guard.py     28 tests
+  tests/test_pam4_demodulation.py               44 tests
+  tests/test_cyclic_symbol_rate.py              25 tests
+  tests/test_sps_generalisation.py              26 tests
+  src/radiofry/decoding/demodulators/pam_demod.py  PAM4 demodulator (Entry 035)
 
 --------------------------------------------------------------------------------
 DO NOT COMMIT
@@ -93,11 +121,51 @@ No analog dataset artifacts exist anywhere in the repo - the AM-DSB, AM-SSB and
 WBFM tests write captures into pytest tmp_path only.
 
 --------------------------------------------------------------------------------
+BENCHMARK STATE (Entry 033, measurement only - no production change)
+--------------------------------------------------------------------------------
+
+350 captures, fresh seeds. Digital top-1 59.0% / top-3 96.0% (100% at >=10 dB);
+analog 54.0% overall, 88.9% at >=10 dB, 81/81 correct when the analog gate engaged;
+digital falsely routed as analog 0/200 at sps=8.
+
+MODEL DECISION: TARGETED FIX - do not retrain (top-3 is 100% at >=10 dB). The
+freeze-blocking safety defect (GFSK accepted as WBFM in 76% of sps=32 captures) was
+CLOSED by Entry 034: 27/50 -> 0/50, digital false-analog routing 128/600 -> 1/600,
+analog routing unchanged. Entry 035 closed item 2 (PAM4 demodulation: BER 0.00000
+at 20 dB, 0/25 -> 10/10 demodulated). Entry 036 REDIRECTED item 3: the ~0.47 FSK BER is
+SYMBOL-RATE ESTIMATION, not GFSK demodulation, and it hits CPFSK equally (both
+collapse to ~0.50 above sps=8). No production change was made. Entry 037 then investigated FSK symbol-rate
+estimation and returned a NEGATIVE RESULT (line at the noise floor; needs a
+cyclostationary estimator). Entries 036 and 037 made NO production changes - they are
+documentation only. Entry 038 delivered a gated cyclostationary FSK
+estimator: GO for CPFSK (BFSK sps16 BER 0.51 -> 0.018), NO-GO for GFSK, which is now an
+accepted capability limitation. Entry 039 ran the final synthetic benchmark
+(570 captures, ZERO production changes) and returned TARGETED BLOCKER: no implementation
+defect, safety excellent (digital->analog 0.21%), demodulators at median BER 0.0010 when
+given a correct Rs - but the CNN is out-of-distribution at samples-per-symbol 4 and 32
+(fused 14.2% / 6.7% vs 59.2% at sps 8). Items open: Entry 040 CNN retrain with sps
+augmentation, AM-SSB LSB detection at 10 dB.
+
+Entry 040 then closed that blocker: SPS-augmented training (4/8/16/32) plus a new
+DIGITAL-ONLY default checkpoint lift end-to-end fused accuracy from 35.4% to 99.5%
+(sps 32: 10.4% -> 97.9%), with confident-wrong falling 23.4% -> 0.5% and analog
+routing unchanged. The 128-sample inference window was tested and KEPT - longer
+windows gave no test-set gain.
+
+NOTE: reports/benchmark_v039/ and reports/entry040/ hold benchmark/experiment output.
+Both are gitignored (/reports/) and must stay untracked.
+
+IMPORTANT for whoever commits this: models_saved/ is gitignored, so the new default
+checkpoint modulation_cnn_v3_spsaug.pt (+ its _metrics.json sibling) is NOT tracked.
+A fresh clone will return "Unclassified" until that artifact is distributed. The old
+modulation_cnn.pt is retained so the Entry 039 baseline stays reproducible.
+
+--------------------------------------------------------------------------------
 TEST STATE AT HANDOFF
 --------------------------------------------------------------------------------
 
   python -m pytest -q --ignore=tests/test_model_report.py
-  -> 646 passed, 1 failed
+  -> 826 passed, 1 failed, 1 skipped
 
 The --ignore is required: tests/test_model_report.py imports h5py, which is not
 installed, and the collection error aborts the whole session. The one failure is

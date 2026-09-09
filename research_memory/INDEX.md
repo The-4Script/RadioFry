@@ -41,6 +41,17 @@ Map of historical entries in `BANK.md`. Use `search_memory.py` to retrieve the f
 - **Entry 029**: AM-SSB carrier estimation - no safe blind fix (NEGATIVE RESULT; needs ~1 Hz, best blind ~500 Hz)
 - **Entry 030**: SigMF sidecar centre-frequency ingestion - SSB recovery 0.995-1.000 with real metadata
 - **Entry 031**: Analog routing dominance (READ-ONLY) - CNN omits AM-SSB LSB entirely; gate validated 60/60, 0/480 digital FP
+- **Entry 032**: Conservative analog subtype routing - classical gate + deterministic rule; 55/60 analog, gate adds 0 digital FP
+
+## System benchmarks
+- **Entry 033**: Final synthetic end-to-end benchmark (350 captures) - recommendation TARGETED FIX, not freeze, not retrain
+- **Entry 034**: Fusion safety gate - classical digital family blocks CNN analog labels; GFSK->WBFM 27/50 -> 0/50
+- **Entry 035**: PAM4 demodulation + dispatch route (new pam_demod.py); BER 0.00000 at 20 dB, 0/25 -> 10/10 demodulated
+- **Entry 036**: GFSK demodulation (NEGATIVE RESULT) - the ~0.47 BER is SYMBOL-RATE ESTIMATION, not GFSK, and hits CPFSK equally
+- **Entry 037**: FSK symbol-rate estimation (NEGATIVE RESULT) - line is at the noise floor (3-5x vs 17-42x where it works); needs a cyclostationary estimator
+- **Entry 038**: Cyclostationary FSK symbol rate - GO for CPFSK (BFSK sps16 BER 0.51->0.018), NO-GO for GFSK; gate 6.0, zero regressions
+- **Entry 039**: Final synthetic benchmark (570 captures) - TARGETED BLOCKER: CNN is out-of-distribution at sps 4/32; corrects Entry 033's do-not-retrain
+- **Entry 040**: CNN SPS generalisation - SHIP. Fused 35.4% -> 99.5%; window hypothesis REJECTED (128 kept); new v3 digital-only default checkpoint
 - Analog captures still do not route to an analog demodulator; the CNN has no analog class.
 
 ## Housekeeping
