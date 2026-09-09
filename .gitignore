@@ -5,7 +5,13 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .radiofry_upload
+# Model checkpoints ARE tracked - see the nine artifacts already under models_saved/.
+# Only scratch and smoke artifacts are excluded. A blanket /models_saved/ rule was added
+# in 8c3a1f4 alongside /data/ and /reports/; because git ignore rules do not apply to
+# already-tracked files, the existing models kept working while every checkpoint created
+# afterwards was silently left untracked (BANK.md Entries 017 and 040).
 models_saved/*_smoke.pt
+models_saved/*_experimental*.pt
 data/synthetic/**/*.npy
 data/RML2016.10a_dict.pkl
 data/2018.01/
@@ -13,4 +19,3 @@ data/2018.01/
 reports/*.png
 /data/
 /reports/
-/models_saved/

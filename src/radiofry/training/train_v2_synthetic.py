@@ -316,6 +316,26 @@ def train_v2(
     output.parent.mkdir(parents=True, exist_ok=True)
     torch.save(checkpoint, output)
 
+    # The inference loader refuses a checkpoint whose sibling metrics file is missing or
+    # whose hash disagrees, so writing it here is part of producing a usable artifact -
+    # not an optional extra. Entry 040 trained a checkpoint without it and every
+    # prediction came back "Unclassified" until the sibling was written by hand.
+    write_metrics(output_path, {
+        "model_sha256": checkpoint["model_sha256"],
+        "labels": labels,
+        "sample_length": FRAME_LENGTH,
+        "samples_per_symbol_sweep": list(SAMPLES_PER_SYMBOL_SWEEP),
+        "features": "iqap",
+        "dataset": checkpoint["dataset"],
+        "seed": torch_seed,
+        "best_epoch": best_epoch,
+        "best_validation_loss": best_loss,
+        "training_seconds": elapsed,
+        "split_sizes": {name: len(specs) for name, specs in split.items()},
+        "frame_counts": {name: int(data["frames"].shape[0]) for name, data in arrays.items()},
+        "history": history,
+    })
+
     return {
         "checkpoint_path": str(output),
         "labels": labels,
