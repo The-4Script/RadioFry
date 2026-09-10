@@ -129,6 +129,7 @@ def render_sidebar(active_stage: int, has_analysis: bool) -> None:
             ("pages/6_fec_decoding.py", "/fec_decoding", "◇", "FEC decoding"),
             ("pages/7_correlation.py", "/correlation", "◎", "Correlation"),
             ("pages/8_report.py", "/report", "▤", "Report"),
+            ("pages/9_time_machine.py", "/time_machine", "🕐", "Signal Time Machine"),
         ]
         for page, href, icon, label in navigation:
             try:
