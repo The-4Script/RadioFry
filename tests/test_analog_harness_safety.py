@@ -48,6 +48,10 @@ def test_load_ground_truth_handles_a_null_bits_block(analog_dataset) -> None:
     assert loaded["metadata"]["capture_kind"] == "analog"
 
 
+@pytest.mark.skipif(
+    not (V1_CAPTURES / "QPSK_snr20dB_r000.json").exists(),
+    reason="frozen V1 dataset not present",
+)
 def test_load_ground_truth_still_returns_arrays_for_digital() -> None:
     loaded = load_ground_truth(V1_CAPTURES / "QPSK_snr20dB_r000.json")
 
@@ -198,7 +202,10 @@ def test_ground_truth_file_is_not_mutated_by_the_harness(analog_dataset) -> None
 # --- digital behaviour must be unchanged ----------------------------------------------
 
 
-@pytest.mark.skipif(not V1_CAPTURES.exists(), reason="frozen V1 dataset not present")
+@pytest.mark.skipif(
+    not (V1_CAPTURES / "QPSK_snr20dB_r000.json").exists(),
+    reason="frozen V1 dataset not present",
+)
 def test_digital_capture_still_scores_a_real_ber() -> None:
     row = {
         "capture_id": "QPSK_snr20dB_r000",
