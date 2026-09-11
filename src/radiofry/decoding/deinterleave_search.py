@@ -7,6 +7,7 @@ import numpy as np
 from .deinterleavers.block import block_deinterleave
 from .deinterleavers.convolutional import convolutional_deinterleave
 from .deinterleavers.diagonal import diagonal_deinterleave
+from .deinterleavers.pseudo_random import pseudo_random_deinterleave
 
 
 @dataclass(frozen=True)
@@ -25,10 +26,21 @@ def _entropy(bits: np.ndarray) -> float:
     return float(-sum(prob * np.log2(prob) for prob in counts if prob > 0))
 
 
-def search_deinterleave(bits: np.ndarray, interleaver_type: str, candidates: tuple[int, ...] = (2, 4, 8, 16)) -> DeinterleaveResult:
+def search_deinterleave(
+    bits: np.ndarray,
+    interleaver_type: str,
+    candidates: tuple[int, ...] = (2, 4, 8, 16),
+    *,
+    seed: int | None = None,
+) -> DeinterleaveResult:
     values = np.asarray(bits, dtype=np.uint8).ravel() & 1
     if interleaver_type == "pseudo_random":
-        return DeinterleaveResult(values, interleaver_type, {}, 0.0, "Exact de-interleaving requires the generator seed or permutation.")
+        # A seeded permutation is one of n! possibilities and the bitstream says nothing
+        # about which, so this is unrecoverable blind - but exact once the seed is known.
+        if seed is None:
+            return DeinterleaveResult(values, interleaver_type, {}, 0.0, "Exact de-interleaving requires the generator seed or permutation.")
+        restored = pseudo_random_deinterleave(values, seed)
+        return DeinterleaveResult(restored, interleaver_type, {"seed": int(seed)}, -_entropy(restored))
     best = (values, {}, -_entropy(values))
     for first in candidates:
         try:
