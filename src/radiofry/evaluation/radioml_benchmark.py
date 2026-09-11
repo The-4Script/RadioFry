@@ -135,6 +135,13 @@ def evaluate_checkpoint(checkpoint_path: str | Path, dataset_root: str | Path, *
 
     import torch
 
+    # Validate before doing any work. Loading a checkpoint and reading a 21 GB file only to
+    # reject an argument wastes both, and on a machine without the dataset it surfaces as a
+    # FileNotFoundError instead of the ValueError this promises.
+    if truth_space not in {"radiofry", "dataset"}:
+        raise ValueError(
+            f"truth_space must be 'radiofry' or 'dataset', not {truth_space!r}")
+
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model, labels, digest, _ = load_model(checkpoint_path, device)
 
@@ -143,12 +150,7 @@ def evaluate_checkpoint(checkpoint_path: str | Path, dataset_root: str | Path, *
     subset = load_indices(dataset_root, split, indices, dtype="float16")
     frames = subset.complex_frames()
 
-    if truth_space == "radiofry":
-        truth = subset.radiofry_label
-    elif truth_space == "dataset":
-        truth = subset.modulation
-    else:
-        raise ValueError("truth_space must be 'radiofry' or 'dataset'")
+    truth = (subset.radiofry_label if truth_space == "radiofry" else subset.modulation)
 
     probabilities = predict(model, frames, device)
     chosen = np.array([labels[i] for i in probabilities.argmax(axis=1)])
