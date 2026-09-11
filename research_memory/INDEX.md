@@ -52,6 +52,11 @@ Map of historical entries in `BANK.md`. Use `search_memory.py` to retrieve the f
 - **Entry 038**: Cyclostationary FSK symbol rate - GO for CPFSK (BFSK sps16 BER 0.51->0.018), NO-GO for GFSK; gate 6.0, zero regressions
 - **Entry 039**: Final synthetic benchmark (570 captures) - TARGETED BLOCKER: CNN is out-of-distribution at sps 4/32; corrects Entry 033's do-not-retrain
 - **Entry 040**: CNN SPS generalisation - SHIP. Fused 35.4% -> 99.5%; window hypothesis REJECTED (128 kept); new v3 digital-only default checkpoint
+- **Entry 041**: Pre-real-data refinement - CNN baseline 95.38% on unseen seeds, NO model change (QAM16/QAM64 below 5 dB proven INFORMATION-limited, not model-limited); occupied-bandwidth defect found and FIXED (was ~fs for every capture)
+- **Entry 042**: Final pre-real-data hardening - TWO silent robustness defects fixed: one NaN erased a whole capture (preprocess DC subtraction), and any burst collapsed the symbol rate to ~24 Hz (envelope harmonics outscored the real line)
+- **Entry 043**: PS completion audit - NO FEC scheme decoded at all (3 dependency-gated, LDPC a stub); fec extra installed, LDPC bit-flipping decoder implemented (112/112 exhaustive), pseudo-random de-interleaving closed; suite fully green 1256/0
+- **Entry 044**: Backend FROZEN + first real-data baseline - frozen checkpoint scores **0.20% on real OTA data** against 95.38% synthetic, and calibration INVERTS (wrong answers more confident than right ones). No training. Real-world adapter added
+- **Entry 045**: Real-data investigation (NO TRAINING RUN) - the released split is **contaminated class-dependently** (QAM 40-48% of test frames have a near-duplicate in train, BPSK 10%, GMSK 4-5%), but **0.0% across recording boundaries**, which licenses a capture-disjoint SNR-holdout protocol. Measured **sps 10, not the paper's 4**; frames are **not** power-normalised (23.3 dB class spread = a usable shortcut); OFDM/WBFM recorded under-driven at ~6 ADC levels. Two of my own results corrected: the 0.94-0.98 correlation (wrong null) and the OFDM degeneracy hypothesis. Channel-label polarity UNRESOLVED
 - Analog captures still do not route to an analog demodulator; the CNN has no analog class.
 
 ## Housekeeping

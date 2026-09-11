@@ -1,6 +1,23 @@
 # Current State
 
-_Last updated: 2026-09-10, after BANK.md Entry 040 (CNN SPS generalisation)._
+> ## ⚠ THE HEADLINE NUMBER DOES NOT TRANSFER
+>
+> The frozen production checkpoint scores **95.38% on synthetic data and 0.20% on real
+> over-the-air data** (Entry 044, zero training, test split only, 6,000 frames across the
+> three mappable classes).
+>
+> Worse than the accuracy: **calibration inverts.** On synthetic data the model was never
+> wrong above 0.683 confidence; on real data its *wrong* answers have median confidence
+> 0.814 and 492 of them exceed 0.99.
+>
+> The pipeline itself behaved correctly on the same data - the symbol-rate estimator
+> recovered ~199 kHz consistently. It is the **classifier** that does not transfer.
+>
+> **Every accuracy figure in this document is synthetic-to-synthetic and must never be
+> presented as real-world performance.**
+
+
+_Last updated: 2026-09-11, after BANK.md Entry 044 (freeze + first real-data baseline)._
 
 ## Status by component
 
@@ -44,6 +61,184 @@ _Last updated: 2026-09-10, after BANK.md Entry 040 (CNN SPS generalisation)._
   confident-wrong **23.4% -> 0.5%**. Analog unaffected (6/6 each). **These Entry 039
   numbers are now stale** - re-run the benchmark against the new default.
 
+## CNN baseline (Entry 041, 800 captures, unseen seeds 77001-77005)
+
+Production `modulation_cnn_v3_spsaug.pt`, measured directly rather than inherited:
+
+- top-1 **95.38%**; **100% at 20/15/10 dB**, 93.8% at 5 dB, 83.1% at 0 dB.
+- Per class: BPSK 100, QPSK 100, 8PSK 99, PAM4 99, CPFSK 97, GFSK 97, **QAM16 85,
+  QAM64 86** (of 100 each).
+- **Zero confidently-wrong predictions**: max wrong-prediction confidence **0.683**.
+- 25 of 37 errors are QAM16<->QAM64; every error is at SNR <= 5 dB.
+
+**QAM16/QAM64 below 5 dB is INFORMATION-limited, not model-limited.** A two-class
+discriminator given 64x the data, oracle symbol timing and a threshold fitted on the test
+set itself reaches only 58.3% at 0 dB and 73.3% at 5 dB; the CNN scores 77.5% at 5 dB,
+*above* that cheating bound. The lever is capture length: 8k symbols -> 73.8%,
+32k symbols -> 85.0%. **Do not retrain the CNN for QAM without longer captures.**
+
+Inference configuration is already optimal: eight window/count combinations were evaluated
+on identical captures and **none beats production 128x4**. Longer windows help QAM at 5 dB
+but hurt CPFSK/GFSK at 10 dB, so a single global window cannot win.
+
+## Robustness hardening (Entry 042)
+
+Two silent defects in the path every capture takes, neither findable with synthetic V1:
+
+- **One non-finite sample erased an entire capture.** `preprocess` subtracts the mean;
+  `np.mean` of an array containing one NaN is NaN, so 1 bad sample became 8192. Every
+  parameter returned `None` while the classifier still emitted a label. **Fixed**:
+  non-finite samples are zeroed first and counted in `metadata["non_finite_samples"]`.
+- **Any burst collapsed the symbol rate.** A capture at 75% duty reported **24 Hz against
+  a true 25,000 Hz**; the symbol-rate line was still at full strength, but the burst
+  envelope's dense harmonic series outscored it in `_select_symbol_rate`. **Fixed**: a
+  minimum symbol-rate floor of `fs / MAX_SAMPLES_PER_SYMBOL` (256), matching the guard the
+  cyclic estimator has had since Entry 038. Now exact at every duty from 100% to 10%,
+  with no regression on continuous captures (66.6% vs 66.2%).
+
+**Measured and deliberately not fixed:** below 128 samples the pipeline returns confident
+nonsense (8 samples -> QAM64 at trust **1.000**). Enforce a minimum length at ingestion
+when real data arrives.
+
+## FEC / interleaving status (Entry 043)
+
+Previously **no FEC scheme decoded at all**: three were dependency-gated and LDPC was an
+explicit stub. Now, with the declared `fec` extra installed:
+
+| scheme | status | evidence |
+|---|---|---|
+| Reed-Solomon | **operational** | exact recovery at 0/5/16 byte errors, correct refusal at 17 |
+| Convolutional / Viterbi | **operational** | BER 0.0000 at 0/5/20 bit flips |
+| Concatenated | **operational** | BER 0.0000 through both layers |
+| LDPC | **operational with a known `H`** | 112/112 exhaustive single-error correction; honest refusal without `H` |
+
+| interleaver | status |
+|---|---|
+| block / diagonal / convolutional | **operational**, round-trip verified |
+| pseudo-random | **exact with the seed**, honest refusal without it |
+
+**The `fec` extra must be installed** (`pip install -e ".[fec]"`), or three of four schemes
+report an honest failure instead of decoding. This is also the entire content of the
+long-standing "pre-existing reedsolo failure" - the suite is now **1256 passed, 0 failed**.
+
+Two PS items are information-theoretically impossible blind and are not claimed otherwise:
+LDPC needs its parity-check matrix, pseudo-random de-interleaving needs the seed. Both work
+exactly when that side information is supplied.
+
+## End-to-end BER (Entry 043, sps 8, 20 dB)
+
+7 of 8 classes deliver bits: BPSK/QPSK/8PSK/PAM4/QAM16 at **0.0000**, CPFSK 0.0088,
+QAM64 0.0270. The single failure is **GFSK, attributed to symbol-rate estimation** (Entry
+037/038), not to the demodulator.
+
+## Production freeze (Entry 044)
+
+The backend is frozen before real-data training: `docs/PRODUCTION_FREEZE.md` records the
+identities and `tests/test_production_freeze.py` enforces them. Checkpoint
+`a7b02533a7c7129c`, 8 digital labels, 4-channel `iqap`, 128-sample frames, 4 windows.
+Weights, labels and inference configuration are pinned together. Do not re-cut without a
+BANK entry.
+
+## Real-world dataset status (Entry 045 - investigation complete, NO TRAINING RUN)
+
+Full record: **`docs/REALWORLD_DATASET.md`**. Scripts and raw outputs:
+`research_memory/experiments/realworld_2026_09/`.
+
+**Available and fully inventoried**: real-world multipath IQ (Belousov & Ronkin, 2026), now
+extracted at `Documents/RadioFry/Real-World IQ Dataset for Automatic Radio Modulati/dataset/`.
+560,000 frames (400k/80k/80k), `(N, 1024, 2)` float16, 2 MSps, 2.4 GHz, SNR **20-30 dB only**,
+84 recording configurations, **every one present in all three splits**. All access is `h5py`
+mode `'r'`; the raw data and the original zip are unmodified.
+
+**The released data contradicts its own paper in six places.** Measured, and the measurement
+wins: symbol rate **199,219 Hz => sps 10** (paper says 100 kSps / sps 4, which is also
+internally inconsistent with its own "upsampled to 2 MSps"); frames are **not** power-
+normalised (23.3 dB spread between classes, and log power alone predicts the class at 22.9%
+vs 14.3% chance); 560k frames not 840k; per-configuration counts 753-5,814, not balanced.
+
+### Leakage - the released split is contaminated, class-dependently
+
+Near-duplicate rate (|corr| > 0.9, DC removed, peak over lags, against a phase-randomised
+surrogate null of ~0.30 - **not** the naive `1/sqrt(1024)` = 0.031, which was my own first
+error and inflated an early reading to 0.94-0.98):
+
+| class | within a recording | across recordings |
+|---|---|---|
+| **QAM** | **40-48%** | **0.0%** |
+| BPSK | 10% | **0.0%** | 
+| QPSK | 8% | **0.0%** |
+| GMSK | 4-5% | **0.0%** |
+
+**Roughly half of QAM's released test split is a near-duplicate of its training data**, so any
+QAM accuracy on that split - including the paper's 84.3% - is inflated. Exact duplicates are
+negligible (2 frames train n test). A hardware-artifact probe (DC offset, gain imbalance,
+quadrature error, power) reaches **31.4%** across splits, chance 14.3%.
+
+**Duplication does not cross recording boundaries for any digital class**, which licenses the
+protocol below.
+
+### Split protocol - DECIDED, not yet executed
+
+`TRAIN_SNR_DB = (20, 24, 28)`, `HELDOUT_SNR_DB = (22, 26, 30)`, **`subset_test.h5` sealed**.
+Each configuration is a separate `.dat` recording, so holding out SNR levels holds out 42
+whole recordings. Train 138,600 / validation 21,000 frames, class balance exact.
+Leakage is then **measured**, not assumed: the same model is scored on the sealed test split
+at {22,26,30} (different recordings) and at {20,24,28} (the same ones it trained on).
+
+Limits stated rather than glossed: file-disjoint but not necessarily *session*-disjoint, and
+30 dB is a 2 dB extrapolation. **No claim of "no leakage" is made.**
+
+### Known defects and unresolved questions
+
+- **OFDM and WBFM were recorded badly under-driven**: a median of **6 distinct float16 levels**
+  versus 66-111 for other classes, split into two power populations 18x/99x apart. A
+  data-quality defect in 2 of 7 classes. Neither maps to a RadioFry label.
+- **Channel label polarity is UNRESOLVED.** The labels are genuinely learnable (a log-PSD probe
+  separates them at 77-92%), but no echo is detectable at the documented 100/200 us lags and
+  per-class verdicts disagree. **Do not claim a multipath-robustness result from this axis.**
+- Only **3 of 7 classes map** to RadioFry (BPSK, QPSK, QAM=QAM16). **GMSK is still not mapped
+  to GFSK.** Training uses the dataset's own 7-class space; the V3 comparison is made on the
+  restricted BPSK/QPSK/QAM view with each model free across its own full label space.
+
+### Status of the code
+
+`src/radiofry/training/train_realworld.py` (three modes: `linear_probe` / `finetune` /
+`scratch`), the extended adapter, and `tests/test_realworld_training.py` (23 tests) are
+**written but have never been run** - the run was interrupted. The 1,286-pass baseline
+predates them. **Run the suite before trusting anything**, including `build_windows`'s claimed
+element-for-element equality with the production inference path.
+
+### Compute
+
+torch **2.13.0+cpu**, no CUDA. 1,951 training windows/s => ~30 min per run on CPU. Heavy
+training moves to the **RTX 5060**; before that, verify `torch.cuda.get_arch_list()` contains
+**`sm_120`** (Blackwell - pre-CUDA-12.8 wheels have no kernels for it, and
+`cuda.is_available()` can be True while every launch fails) and that CUDA wheels exist for
+Python 3.14.5. The trainer is structurally device-agnostic but currently hard-codes CPU.
+
+**Not available**: RadioML 2018.01A - inventory outstanding.
+
+## What real-data collection must provide
+
+Derived from the measurements above, not guessed:
+
+1. **Captures of at least 65,536 samples** (>= 8,192 symbols) where QAM16/QAM64
+   discrimination below 10 dB matters. 8,192-sample captures cannot separate them at
+   <= 5 dB no matter what model is used.
+2. **Labelled examples at SNR <= 5 dB specifically** - everything at >= 10 dB is already
+   at 100% synthetically, so high-SNR real data will not move the measurement.
+3. **Carrier-offset metadata** (`.sigmf-meta`) wherever SSB recovery is expected; without
+   it SSB is unrecoverable (Entry 029/030, closed).
+4. **Non-baseband analog captures.** `preprocess` removes DC, which for a baseband AM-DSB
+   capture is the carrier (blocker #3).
+5. Real impairments the synthetic set does not have at all: carrier frequency offset,
+   timing offset, multipath, fading, interference. V1 has **every impairment disabled**.
+6. **At least 128 samples per capture** - below the model's frame length the pipeline
+   interpolates and returns confident nonsense (Entry 042). Enforce this at ingestion.
+7. **Bursty captures are now supported** (Entry 042) but remain untested against real
+   duty cycles, real burst shapes and real inter-burst noise. Collect them deliberately
+   rather than assuming the synthetic gating generalises.
+
 ## Current blockers
 
 1. **CNN analog quality is now the dominant blocker** (Entry 027). The classical
@@ -78,7 +273,15 @@ _Last updated: 2026-09-10, after BANK.md Entry 040 (CNN SPS generalisation)._
 7. QAM64 collapses at low SNR (0.334 accuracy at 0 dB).
 8. Fusion's 0.4 threshold is uncalibrated; analog CNN confidence sits astride it, so
    analog routing is seed-dependent.
-9. Low-SNR FSK symbol-rate estimation is an accepted **negative result** (Entry 014) —
+9. **Analog below 10 dB now fails into a digital label, not into rejection**
+   (Entry 041). v3 is digital-only, so once the classical detector drops from
+   `analog-like` to `QAM-like` there is no analog escape route. Trust is low (0.27-0.42)
+   and review is flagged, so it is not silent - but it is a change from Entry 039.
+10. **The classical detector is blind to PSK** (Entry 041): 0/72 PSK captures get
+   `PSK-like`. `amplitude_cv` is ~0.215 for *every* constant-envelope class and the
+   fourth-power statistic is structurally blind to 8PSK. No rule on the current four
+   features separates the families; measured, and deliberately left unchanged.
+11. Low-SNR FSK symbol-rate estimation is an accepted **negative result** (Entry 014) —
    the spectral line sits below the noise floor. Do not re-attempt without new evidence.
 
 ## Recommended next direction
@@ -123,7 +326,13 @@ supplying real metadata through ingestion. Do not add more analog waveforms.
 - **`models_saved/` is gitignored, so the default checkpoint is untracked.** A fresh clone
   returns `Unclassified`. Also: `train_v2` does not write the `_metrics.json` sibling the
   loader requires - call `write_metrics()` separately or the checkpoint will not load.
-- **99.5% is synthetic-to-synthetic** and is NOT a real-world accuracy claim.
+- **99.5% is synthetic-to-synthetic** and is NOT a real-world accuracy claim. The
+  Entry 041 figure of 95.38% is likewise synthetic-to-synthetic, on unseen seeds.
+- **`estimate_parameters` now uses TWO power fractions** (Entry 041): `occupied_fraction`
+  (0.99) bounds the band used to estimate the noise floor, and `BANDWIDTH_FRACTION`
+  (0.85) is what gets reported as occupied bandwidth. They are separate because one band
+  cannot serve both - coupling them made the reported bandwidth ~0.9 x fs for every
+  capture. Do not re-merge them; a test asserts they stayed apart.
 - Fusion has TWO symmetric guards that must both keep working: Entry 032 (classical
   `analog-like` beats the CNN) and Entry 034 (a positive classical DIGITAL family blocks
   a CNN analog label). Never let one be added back without the other.
