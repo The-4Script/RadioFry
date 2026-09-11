@@ -17,7 +17,7 @@ from .correlation.bitstream_correlation import correlate_bitstream
 from .decoding.deinterleave_search import search_deinterleave
 from .decoding.fec.dispatch import decode_fec
 from .reporting.report_builder import build_report
-from .runtime import check_runtime_artifacts
+from .runtime import check_fec_support, check_runtime_artifacts
 
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -126,6 +126,9 @@ def analyze_capture(
         "interleaver": interleaver_model_path,
         "fec": fec_model_path,
     })
+    # Artifact files being present does not mean the FEC decoders can run; the optional
+    # `fec` extra is a separate condition and was previously invisible in the report.
+    runtime["fec_support"] = check_fec_support()
     return build_report(
         source={"format": processed.source_format, "sample_rate": processed.sample_rate, "samples": processed.iq.size},
         stages={"runtime": runtime, "parameters": parameters, "classical_modulation": classical, "cnn_modulation": prediction, "fusion": fusion or {"label": "Unclassified", "trust_score": 0.0, "review_recommended": True, "message": prediction.message}, "demodulation": demodulation_stage, "bitstream_analysis": bitstream_stages},

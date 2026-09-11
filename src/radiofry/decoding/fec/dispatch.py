@@ -8,7 +8,15 @@ from .rs_wrapper import decode_reed_solomon
 from .viterbi_wrapper import FECResult, decode_convolutional
 
 
-def decode_fec(bits: np.ndarray, scheme: str) -> FECResult:
+def decode_fec(bits: np.ndarray, scheme: str, **parameters) -> FECResult:
+    """Decode `bits` with the named scheme.
+
+    `parameters` carries code-specific side information that cannot be inferred from a
+    captured bitstream - currently `parity_check` (and optionally `systematic_length`) for
+    LDPC. Schemes that need nothing extra ignore it, so every existing call site is
+    unaffected.
+    """
+
     values = np.asarray(bits, dtype=np.uint8).ravel() & 1
     if scheme in {"none", "unknown", ""}:
         return FECResult(values, "none", True, "No FEC decoding applied.")
@@ -20,5 +28,7 @@ def decode_fec(bits: np.ndarray, scheme: str) -> FECResult:
     if scheme == "concatenated":
         return decode_concatenated(values)
     if scheme == "ldpc":
-        return decode_ldpc(values)
+        # Without a parity-check matrix this refuses; with one it genuinely decodes.
+        return decode_ldpc(values, parameters.get("parity_check"),
+                           systematic_length=parameters.get("systematic_length"))
     return FECResult(values, scheme, False, f"No FEC adapter is registered for {scheme}.")
