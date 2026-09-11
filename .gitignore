@@ -12,6 +12,10 @@ __pycache__/
 # afterwards was silently left untracked (BANK.md Entries 017 and 040).
 models_saved/*_smoke.pt
 models_saved/*_experimental*.pt
+# RadioML 2018.01A experiment candidates (BANK Entry 047): not promoted to production,
+# 24-class label space the 8-class pipeline does not consume. Their metrics, SHA256 and
+# full results are catalogued in research_memory/experiments/radioml2018_2026_09/.
+models_saved/modulation_cnn_radioml_*
 data/synthetic/**/*.npy
 data/RML2016.10a_dict.pkl
 data/2018.01/
