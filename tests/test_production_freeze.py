@@ -18,13 +18,27 @@ import pytest
 torch = pytest.importorskip("torch", reason="torch is an optional ml extra")
 
 from radiofry import pipeline  # noqa: E402
-from radiofry.models.artifact_integrity import hash_torch_state_dict  # noqa: E402
+from radiofry.models.artifact_integrity import (  # noqa: E402
+    hash_state_dict_contents,
+    hash_torch_state_dict,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 # --- the frozen identities -------------------------------------------------------------
 FROZEN_CHECKPOINT = "models_saved/modulation_cnn_v3_spsaug.pt"
-FROZEN_STATE_DICT_SHA256 = (
+FROZEN_FILE_SHA256 = (
+    "1444cf667fb017a79df5c50489fe5113b8cde4e0c2640f4a0cb8f2741f52530b")
+FROZEN_WEIGHTS_SHA256 = (
+    "65bb179501f6cbea2cadaa0a64b391e452f930115c38e4e513b7a28c65ed079b")
+
+# The value `hash_torch_state_dict` returned on the machine that cut the freeze. It is
+# quoted throughout BANK.md as the checkpoint's short identity and is kept here for
+# traceability, but it is deliberately NOT asserted: that function hashes the bytes
+# `torch.save` emits, so it varies with the torch version doing the serialising. CI
+# computed `0365780e...` from a checkout that was byte-identical to the local file. The two
+# assertions above replace it and are both environment-independent.
+FROZEN_STATE_DICT_SHA256_LEGACY = (
     "a7b02533a7c7129c5435abb7fa12f95fb1af90188115c7c3cb96d9e580ce5a40")
 FROZEN_V1_SHA256 = (
     "d6d3f918687d0700a43e46211c3f04b9ef74be9d8b232eac5d0e4cf4bf2390ab")
@@ -47,11 +61,65 @@ def test_the_production_default_points_at_the_frozen_checkpoint() -> None:
 
 
 @requires_checkpoint
+def test_the_frozen_checkpoint_file_is_byte_identical() -> None:
+    """The strongest statement available: the file itself has not changed at all."""
+    digest = hashlib.sha256(CHECKPOINT_PATH.read_bytes()).hexdigest()
+
+    assert digest == FROZEN_FILE_SHA256
+
+
+@requires_checkpoint
 def test_the_frozen_checkpoint_weights_are_unchanged() -> None:
-    """The identity every recorded baseline was measured against."""
+    """The identity every recorded baseline was measured against.
+
+    Uses the content hash rather than the serialised-bytes hash so this holds on any
+    machine. A weight that changed by one bit changes this value; a different torch
+    version does not.
+    """
     payload = torch.load(CHECKPOINT_PATH, map_location="cpu", weights_only=False)
 
-    assert hash_torch_state_dict(payload["state_dict"]) == FROZEN_STATE_DICT_SHA256
+    assert hash_state_dict_contents(payload["state_dict"]) == FROZEN_WEIGHTS_SHA256
+
+
+def test_the_weight_hash_is_independent_of_how_the_tensors_were_serialised() -> None:
+    """Guards the property the freeze assertion depends on.
+
+    Without this, a future change to `hash_state_dict_contents` could reintroduce a
+    dependence on the serialisation format and the freeze test would start failing on
+    other machines again, exactly as it did in CI.
+    """
+    import io
+
+    state = {"features.0.weight": torch.arange(12, dtype=torch.float32).reshape(3, 4),
+             "features.0.bias": torch.tensor([0.5, -0.25, 1.0]),
+             "counter": torch.tensor(7)}
+    before = hash_state_dict_contents(state)
+
+    buffer = io.BytesIO()
+    torch.save(state, buffer)
+    buffer.seek(0)
+    restored = torch.load(buffer, map_location="cpu", weights_only=False)
+
+    assert hash_state_dict_contents(restored) == before
+    assert hash_state_dict_contents(dict(reversed(list(state.items())))) == before, (
+        "key order must not change the identity")
+
+
+def test_the_weight_hash_detects_a_single_changed_weight() -> None:
+    """An identity check that cannot see a change is worthless."""
+    state = {"w": torch.zeros(4, 4)}
+    before = hash_state_dict_contents(state)
+
+    state["w"][2, 3] = 1e-7
+
+    assert hash_state_dict_contents(state) != before
+
+
+def test_the_legacy_serialised_hash_is_still_callable() -> None:
+    """Existing checkpoints store values from it, so it must keep working."""
+    state = {"w": torch.zeros(2, 2)}
+
+    assert len(hash_torch_state_dict(state)) == 64
 
 
 @requires_checkpoint

@@ -1,0 +1,55 @@
+{
+  "symbol_rate": {
+    "BPSK": {
+      "magnitude_line_hz": 199218.75,
+      "fourth_power_hz": 37109.375,
+      "bw99_hz": 308593.75,
+      "implied_rs_hz": 228587.96296296295
+    },
+    "QPSK": {
+      "magnitude_line_hz": 199218.75,
+      "fourth_power_hz": 37109.375,
+      "bw99_hz": 447265.625,
+      "implied_rs_hz": 331307.87037037034
+    },
+    "QAM": {
+      "magnitude_line_hz": 199218.75,
+      "fourth_power_hz": 37109.375,
+      "bw99_hz": 248046.875,
+      "implied_rs_hz": 183738.42592592593
+    },
+    "GMSK": {
+      "magnitude_line_hz": 35156.25,
+      "fourth_power_hz": 437500.0,
+      "bw99_hz": 394531.25,
+      "implied_rs_hz": 292245.37037037034
+    },
+    "OFDM": {
+      "magnitude_line_hz": 300781.25,
+      "fourth_power_hz": 37109.375,
+      "bw99_hz": 1953125.0,
+      "implied_rs_hz": 1446759.259259259
+    },
+    "NBFM": {
+      "magnitude_line_hz": 54687.5,
+      "fourth_power_hz": 37109.375,
+      "bw99_hz": 689453.125,
+      "implied_rs_hz": 510706.0185185185
+    },
+    "WBFM": {
+      "magnitude_line_hz": 712890.625,
+      "fourth_power_hz": 37109.375,
+      "bw99_hz": 1798828.125,
+      "implied_rs_hz": 1332465.2777777778
+    }
+  },
+  "power_medians": {
+    "BPSK": 0.07419639825820923,
+    "QPSK": 0.08397337794303894,
+    "QAM": 0.03475692868232727,
+    "GMSK": 0.09897029399871826,
+    "OFDM": 0.0006650686264038086,
+    "NBFM": 0.13987800478935242,
+    "WBFM": 0.0006610453128814697
+  }
+}

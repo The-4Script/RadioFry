@@ -6839,7 +6839,7 @@ space. **GMSK still does not map to GFSK.**
   `select_indices` / `load_indices`, `per_config_limit` stratification, protocol constants.
 * `src/radiofry/training/train_realworld.py` - new: the three modes, sealed-split guard,
   production-checkpoint guard, vectorised `build_windows`.
-* `tests/test_realworld_training.py` - new, 23 tests.
+* `tests/test_realworld_training.py` - new, 19 tests.
 
 **None of it has been run.** The test run was interrupted. The 1,286-pass baseline predates
 these changes. **Run the suite before anything else.** Until then `build_windows`'s claimed
@@ -6883,3 +6883,114 @@ untouched). Frozen V1 and `a7b02533a7c7129c` unchanged. Nothing committed.
 5. Independently of all the above, the synthetic **V2.1 experiment (RRC + sps 10)** still
    attributes the 0.20% at no data cost, and remains the scientifically cleaner path.
 6. RadioML 2018.01A inventory when it is available.
+
+
+---
+
+## Entry 046 - 2026-09-11 - CI red: the freeze hash was never portable. Same bytes, different hash on a different torch.
+
+The push of `82810be` turned CI red on exactly one test,
+`test_production_freeze.py::test_the_frozen_checkpoint_weights_are_unchanged`:
+
+```
+assert '0365780e3346...c51063764165a' == 'a7b02533a7c7...6d9e580ce5a40'
+```
+
+The push itself succeeded - `origin/main` was already at `82810be` and nothing was
+unpushed. The error was the CI run, not the transfer.
+
+### Root cause: `hash_torch_state_dict` hashes the serialised container, not the weights
+
+```python
+def hash_torch_state_dict(state_dict):
+    buffer = BytesIO()
+    torch.save(state_dict, buffer)     # <- the bytes torch CHOSE to write
+    return hash_bytes(buffer.getvalue())
+```
+
+`torch.save` output depends on the torch version and pickle protocol doing the writing, so
+**two machines holding a byte-identical checkpoint can disagree on this hash.** The
+function's docstring claimed "Deterministic identity hashes"; it is deterministic within one
+environment and not across them.
+
+Verified rather than assumed - the file is **not** corrupted and there is no CRLF problem:
+
+| | |
+|---|---|
+| checkpoint blob in the repo | `1444cf667fb017a79df5c50489fe5113...` |
+| checkpoint file on disk | `1444cf667fb017a79df5c50489fe5113...` **identical** |
+| `git check-attr text/eol/binary` | unspecified; git treats it as binary, no conversion |
+| `hash_torch_state_dict` locally | `a7b02533a7c7129c...` |
+| `hash_torch_state_dict` in CI | `0365780e33460a48...` |
+
+Same bytes in, different hash out. That is the whole bug.
+
+### Fix: assert identities that survive a change of environment
+
+New `hash_state_dict_contents` hashes **sorted parameter names with their dtype, shape and
+raw little-endian bytes** - the weights and nothing else. Unchanged by torch version, pickle
+protocol, key order, or a save/load round trip.
+
+The freeze test now pins two portable identities instead of one non-portable one:
+
+| | |
+|---|---|
+| checkpoint **file** SHA-256 | `1444cf667fb017a79df5c50489fe5113b8cde4e0c2640f4a0cb8f2741f52530b` |
+| **weights** SHA-256 (content) | `65bb179501f6cbea2cadaa0a64b391e452f930115c38e4e513b7a28c65ed079b` |
+
+**This is not a weakened test - it is a stronger one.** The file hash pins every byte of the
+artifact; the content hash pins every weight independent of how it was written. Three new
+tests guard the property the freeze now depends on: that the hash is unchanged by a
+save/load round trip and by key order, that it **detects a single weight changed by 1e-7**,
+and that the legacy function still works for the values already stored in checkpoints.
+
+`a7b02533...` is kept in the test and in `docs/PRODUCTION_FREEZE.md` as the historical
+identity, because BANK quotes it throughout, but it is no longer asserted.
+
+**No checkpoint byte was modified.** The frozen artifact is untouched; only how it is
+*checked* changed.
+
+### OPEN - the same bug is live in the production inference path, and is NOT fixed here
+
+`models/modulation_inference.predict_modulation` verifies the checkpoint with the same
+non-portable hash:
+
+```python
+if not is_test_env:
+    if not expected_hash or expected_hash != actual_hash:
+        return ModulationPrediction("Unclassified", 0.0, (), False,
+                                    "CNN artifact integrity check failed...")
+```
+
+So **on any machine whose torch serialises differently from the one that trained the model -
+including after a routine `pip install -U torch` - every prediction returns `Unclassified`.**
+The check is skipped when `CI=true` or under pytest, so no test catches it. It is latent
+today only because the current local torch happens to reproduce `a7b02533`.
+
+**Deliberately not fixed in this change.** It is a behavioural change to the shipping
+inference path, and the correct fix needs a decision: the portable content hash has to be
+stored somewhere the runtime can read, and the value inside the frozen `.pt` cannot be
+rewritten without breaking the file hash that now pins it. Proposed: store
+`state_dict_content_sha256` in the metrics JSON sidecar (tracked, not frozen) and have the
+runtime prefer it. Flagged in `docs/PRODUCTION_FREEZE.md`.
+
+### Also in this push
+
+The real-data investigation of Entry 045 - `docs/REALWORLD_DATASET.md`, the extended
+dataset adapter, `training/train_realworld.py`, and the reproduction scripts under
+`research_memory/experiments/realworld_2026_09/`.
+
+**The 19 + 15 real-data tests that Entry 045 recorded as "written but never run" have now
+been run and pass.** That closes its most important open item:
+`test_build_windows_reproduces_the_production_path_exactly` passes, so the vectorised window
+builder **is** element-for-element identical to
+`modulation_inference._window_frames` + `add_signal_features`. Every planned comparison
+against V3 rests on that, and it is now verified rather than asserted.
+
+Local suite: **1309 passed, 1 skipped, 0 failed** (was 1286 before this work).
+
+### Next step
+
+1. Decide on the live runtime integrity bug above - it is demo-breaking on a fresh machine.
+2. Entry 045's remaining items are unchanged: the OFDM/WBFM handling decision, GPU toolchain
+   verification (`sm_120`), then E1/E2/E3.

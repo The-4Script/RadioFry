@@ -1,0 +1,121 @@
+{
+  "BPSK": {
+    "SAME recording": {
+      "median": 0.4087841510772705,
+      "frac_above_0p9": 0.1,
+      "null_median": 0.2914956212043762
+    },
+    "other SNR": {
+      "median": 0.38374054431915283,
+      "frac_above_0p9": 0.0,
+      "null_median": 0.2969040274620056
+    },
+    "other chan": {
+      "median": 0.37252235412597656,
+      "frac_above_0p9": 0.0,
+      "null_median": 0.2897230386734009
+    }
+  },
+  "QPSK": {
+    "SAME recording": {
+      "median": 0.3089568316936493,
+      "frac_above_0p9": 0.08,
+      "null_median": 0.28164950013160706
+    },
+    "other SNR": {
+      "median": 0.2931787669658661,
+      "frac_above_0p9": 0.0,
+      "null_median": 0.2765921354293823
+    },
+    "other chan": {
+      "median": 0.29037564992904663,
+      "frac_above_0p9": 0.0,
+      "null_median": 0.2797531187534332
+    }
+  },
+  "QAM": {
+    "SAME recording": {
+      "median": 0.8862329125404358,
+      "frac_above_0p9": 0.48,
+      "null_median": 0.3061453700065613
+    },
+    "other SNR": {
+      "median": 0.30744409561157227,
+      "frac_above_0p9": 0.0,
+      "null_median": 0.2977979779243469
+    },
+    "other chan": {
+      "median": 0.3015888035297394,
+      "frac_above_0p9": 0.0,
+      "null_median": 0.29951706528663635
+    }
+  },
+  "GMSK": {
+    "SAME recording": {
+      "median": 0.31444424390792847,
+      "frac_above_0p9": 0.04,
+      "null_median": 0.27894192934036255
+    },
+    "other SNR": {
+      "median": 0.30016830563545227,
+      "frac_above_0p9": 0.0,
+      "null_median": 0.27288925647735596
+    },
+    "other chan": {
+      "median": 0.29649341106414795,
+      "frac_above_0p9": 0.0,
+      "null_median": 0.28027552366256714
+    }
+  },
+  "OFDM": {
+    "SAME recording": {
+      "median": 0.12640316784381866,
+      "frac_above_0p9": 0.2866666666666667,
+      "null_median": 0.12208203971385956
+    },
+    "other SNR": {
+      "median": 0.12948650121688843,
+      "frac_above_0p9": 0.2866666666666667,
+      "null_median": 0.12313811480998993
+    },
+    "other chan": {
+      "median": 0.12770205736160278,
+      "frac_above_0p9": 0.2866666666666667,
+      "null_median": 0.12374356389045715
+    }
+  },
+  "NBFM": {
+    "SAME recording": {
+      "median": 0.3083920478820801,
+      "frac_above_0p9": 0.0,
+      "null_median": 0.30475640296936035
+    },
+    "other SNR": {
+      "median": 0.30749017000198364,
+      "frac_above_0p9": 0.0,
+      "null_median": 0.3039432168006897
+    },
+    "other chan": {
+      "median": 0.3132290840148926,
+      "frac_above_0p9": 0.0,
+      "null_median": 0.3129861354827881
+    }
+  },
+  "WBFM": {
+    "SAME recording": {
+      "median": 0.323185533285141,
+      "frac_above_0p9": 0.2866666666666667,
+      "null_median": 0.31074368953704834
+    },
+    "other SNR": {
+      "median": 0.3230020999908447,
+      "frac_above_0p9": 0.2866666666666667,
+      "null_median": 0.3083620071411133
+    },
+    "other chan": {
+      "median": 0.32202523946762085,
+      "frac_above_0p9": 0.2866666666666667,
+      "null_median": 0.3072706162929535
+    }
+  }
+}

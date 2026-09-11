@@ -1,0 +1,37 @@
+{
+  "BPSK": {
+    "frac_pr_below_50": 0.0,
+    "frac_pr_below_10": 0.0,
+    "median_pr": 809.4312744140625
+  },
+  "QPSK": {
+    "frac_pr_below_50": 0.0,
+    "frac_pr_below_10": 0.0,
+    "median_pr": 901.4807739257812
+  },
+  "QAM": {
+    "frac_pr_below_50": 0.0,
+    "frac_pr_below_10": 0.0,
+    "median_pr": 722.9727783203125
+  },
+  "GMSK": {
+    "frac_pr_below_50": 0.0,
+    "frac_pr_below_10": 0.0,
+    "median_pr": 1000.8814086914062
+  },
+  "OFDM": {
+    "frac_pr_below_50": 0.0,
+    "frac_pr_below_10": 0.0,
+    "median_pr": 507.41168212890625
+  },
+  "NBFM": {
+    "frac_pr_below_50": 0.0,
+    "frac_pr_below_10": 0.0,
+    "median_pr": 957.4164428710938
+  },
+  "WBFM": {
+    "frac_pr_below_50": 0.0,
+    "frac_pr_below_10": 0.0,
+    "median_pr": 512.95849609375
+  }
+}

@@ -134,10 +134,22 @@ QAM64 0.0270. The single failure is **GFSK, attributed to symbol-rate estimation
 ## Production freeze (Entry 044)
 
 The backend is frozen before real-data training: `docs/PRODUCTION_FREEZE.md` records the
-identities and `tests/test_production_freeze.py` enforces them. Checkpoint
-`a7b02533a7c7129c`, 8 digital labels, 4-channel `iqap`, 128-sample frames, 4 windows.
-Weights, labels and inference configuration are pinned together. Do not re-cut without a
-BANK entry.
+identities and `tests/test_production_freeze.py` enforces them. 8 digital labels, 4-channel
+`iqap`, 128-sample frames, 4 windows. Weights, labels and inference configuration are pinned
+together. Do not re-cut without a BANK entry.
+
+**Entry 046 changed how it is checked, not what is frozen** (no checkpoint byte moved). The
+freeze is now pinned on two **portable** identities - file SHA `1444cf667fb017a7` and weights
+SHA `65bb179501f6cbea` (`hash_state_dict_contents`). The old `a7b02533a7c7129c` came from
+`hash_torch_state_dict`, which hashes the bytes **`torch.save` produces** and therefore varies
+with the torch version: CI computed `0365780e` from a byte-identical checkout and the test
+failed for that reason alone. `a7b02533` is kept for traceability, no longer asserted.
+
+> ⚠ **OPEN, live in production.** `predict_modulation` still verifies with that same
+> non-portable hash, so on a machine whose torch serialises differently - including after a
+> routine `pip install -U torch` - **every prediction returns `Unclassified`**. The check is
+> bypassed under pytest and `CI=true`, so no test catches it. Fix proposed in Entry 046; it
+> needs a decision because the value inside the frozen `.pt` cannot be rewritten.
 
 ## Real-world dataset status (Entry 045 - investigation complete, NO TRAINING RUN)
 
@@ -200,13 +212,18 @@ Limits stated rather than glossed: file-disjoint but not necessarily *session*-d
   to GFSK.** Training uses the dataset's own 7-class space; the V3 comparison is made on the
   restricted BPSK/QPSK/QAM view with each model free across its own full label space.
 
-### Status of the code
+### Status of the code (updated Entry 046 - now verified)
 
 `src/radiofry/training/train_realworld.py` (three modes: `linear_probe` / `finetune` /
-`scratch`), the extended adapter, and `tests/test_realworld_training.py` (23 tests) are
-**written but have never been run** - the run was interrupted. The 1,286-pass baseline
-predates them. **Run the suite before trusting anything**, including `build_windows`'s claimed
-element-for-element equality with the production inference path.
+`scratch`), the extended adapter, and their **34 tests now RUN and pass**. Entry 045 recorded
+them as written-but-never-executed; that item is **closed**.
+
+The one that mattered: `test_build_windows_reproduces_the_production_path_exactly` passes, so
+the vectorised window builder **is** element-for-element identical to
+`modulation_inference._window_frames` + `add_signal_features`. Every planned comparison
+against V3 rests on it, and it is now verified rather than asserted.
+
+Suite: **1309 passed, 1 skipped, 0 failed**.
 
 ### Compute
 
