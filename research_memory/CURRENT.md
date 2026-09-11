@@ -1,6 +1,11 @@
 # Current State
 
-> ## ⚠ THE HEADLINE NUMBER DOES NOT TRANSFER
+> ## ⚠ THE SYNTHETIC HEADLINE NUMBER DOES NOT TRANSFER — BUT REAL-DATA TRAINING FIXES IT
+>
+> **Entry 047**: on RadioML 2018.01A the frozen checkpoint scores **15.97%** zero-training;
+> a model fine-tuned on that dataset reaches **44.46%** on the same sealed frames, with
+> **zero confident-wrong predictions**. The gap below is real and is closed by training on
+> real data, not by a better synthetic generator.
 >
 > The frozen production checkpoint scores **95.38% on synthetic data and 0.20% on real
 > over-the-air data** (Entry 044, zero training, test split only, 6,000 frames across the
@@ -17,7 +22,7 @@
 > presented as real-world performance.**
 
 
-_Last updated: 2026-09-11, after BANK.md Entry 044 (freeze + first real-data baseline)._
+_Last updated: 2026-09-12, after BANK.md Entry 047 (RadioML 2018.01A: first real-data trained model)._
 
 ## Status by component
 
@@ -233,7 +238,71 @@ training moves to the **RTX 5060**; before that, verify `torch.cuda.get_arch_lis
 `cuda.is_available()` can be True while every launch fails) and that CUDA wheels exist for
 Python 3.14.5. The trainer is structurally device-agnostic but currently hard-codes CPU.
 
-**Not available**: RadioML 2018.01A - inventory outstanding.
+## RadioML 2018.01A (Dataset 2) — INVENTORIED AND TRAINED (Entry 047)
+
+Full record: **`docs/RADIOML2018_DATASET.md`**. Scripts:
+`research_memory/experiments/radioml2018_2026_09/`.
+
+`GOLD_XYZ_OSC.0001_1024.hdf5`, 21.4 GB, at `Documents/RadioFry/dataset 2/`. 2,555,904 frames =
+24 classes x 26 SNR levels x **exactly 4096** — perfectly balanced. **SNR -20 to +30 dB**, the
+low-SNR labelled data this document had listed as a collection requirement. Read-only; the
+dataset is unmodified.
+
+### ⚠ DeepSig's shipped `classes.txt` ordering is WRONG
+
+The download ships two contradictory orderings and the HDF5 has no metadata to arbitrate.
+Impropriety agrees with `classes-fixed` **24/24** and with the shipped file **10/24**;
+confirmed independently by M-th power moments peaking at 2/4/8 for BPSK/QPSK/8PSK. Use
+`radioml2018.CLASSES`. Using the shipped order mislabels every frame and nothing crashes.
+
+### Leakage — far cleaner than Dataset 1
+
+Near-duplicates above 0.9: **0.0% in every class** (Dataset 1: 48% for QAM). SNR levels are
+independent realisations; frames carry no temporal order; zero exact duplicates. **A stratified
+random split is defensible here**, which it never was on Dataset 1. Caveat: no recording
+identifiers exist, so independence is *inferred from absent symptoms*, not guaranteed.
+
+Split: contiguous partition per (class, SNR) block — train 0–2867, val 2867–3481,
+**test 3481–4096 SEALED**.
+
+### Results (sealed test split)
+
+| model | 5 mappable classes | full 24-class |
+|---|---|---|
+| **frozen V3, zero training** | **15.97%** | n/a (8 outputs) |
+| linear_probe (V3 trunk frozen) | 30.19% | 33.17% |
+| **finetune (candidate)** | **44.46%** | **42.62%** |
+| scratch (control) | 38.49% | 40.73% |
+
+- **V3's features transfer partially, not directly**: linear probe 30–33%, 10+ points below
+  unfreezing the trunk.
+- **Synthetic pre-training is a modest help**: finetune beats scratch by 6.0 pts (mappable),
+  1.9 pts (full 24).
+- By SNR: **67.06% at ≥ +10 dB**, 4.92% at ≤ −10 dB (chance 4.17%).
+- **Zero confident-wrong predictions.** Wrong answers median confidence **0.058**, max 0.588,
+  against 0.867 when correct — a usable rejection threshold. Frozen V3 on the same data had
+  798 wrong above 0.9.
+- Failures are structured: 16PSK→32PSK, 64QAM→256QAM, AM-SSB-SC→AM-SSB-WC. Same
+  information-limit as Entry 041's QAM16/QAM64 — **128 samples at sps ~10 is ~12 symbols.**
+
+**Honest limit**: published RadioML results use the full 1024-sample frame and far larger
+networks (~95% high-SNR, ~60% overall). This model sees **1/8 the context** with 140,504
+parameters because that is the production contract. Do not present it as beating them.
+
+**The candidate is NOT promoted** — it has a 24-class label space the 8-class pipeline does not
+consume. `a7b02533a7c7129c` remains the production checkpoint, unchanged.
+
+### Five classes map exactly
+
+BPSK, QPSK, 8PSK, 16QAM→QAM16, 64QAM→QAM64. **GMSK still not mapped to GFSK.** **4ASK not
+mapped to PAM4** — RadioML's 4ASK is unipolar (68% DC), PAM4 is bipolar, and the direct probe
+was broken, so it is unresolved and left unmapped.
+
+### GPU
+
+torch **2.13.0+cu130**, CUDA 13.0, **RTX 5060 sm_120 with exact kernels present**, verified by
+real kernel launch and a weight update — not by `is_available()` alone. **49,767 windows/s
+vs 1,951 on CPU (25x).** `training/device.verify_cuda` raises rather than falling back to CPU.
 
 ## What real-data collection must provide
 

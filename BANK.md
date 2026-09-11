@@ -6994,3 +6994,183 @@ Local suite: **1309 passed, 1 skipped, 0 failed** (was 1286 before this work).
 1. Decide on the live runtime integrity bug above - it is demo-breaking on a fresh machine.
 2. Entry 045's remaining items are unchanged: the OFDM/WBFM handling decision, GPU toolchain
    verification (`sm_120`), then E1/E2/E3.
+
+
+---
+
+## Entry 047 - 2026-09-12 - RadioML 2018.01A: first real-data trained model. 15.97% -> 44.46% on GPU. DeepSig's shipped class ordering is WRONG.
+
+Dataset 2 arrived: **RadioML 2018.01A** (`GOLD_XYZ_OSC.0001_1024.hdf5`, 21.4 GB), the
+inventory outstanding since Entry 044. Inventoried read-only, leakage-tested, adapted to the
+production contract, and used to train the **first real-data RadioFry model candidate** on the
+RTX 5060. Frozen V1 (`d6d3f918687d0700a43e46211c3f04b9`) and the production checkpoint
+(`a7b02533a7c7129c`, file `1444cf667fb017a7`) are **unchanged**. Nothing committed.
+
+Full record: `docs/RADIOML2018_DATASET.md`. Scripts:
+`research_memory/experiments/radioml2018_2026_09/`.
+
+### 1. Inventory - and it is a far better dataset than Dataset 1
+
+2,555,904 frames = 24 classes x 26 SNR levels x **exactly 4096** - perfectly balanced, all 624
+configurations present. `X` `(N,1024,2)` float32, contiguous, uncompressed. **SNR spans -20 to
++30 dB**, which is precisely the low-SNR labelled data CURRENT.md listed as a collection
+requirement and which Dataset 1 (20-30 dB only) could not supply.
+
+**No root attributes, no class names in the file, no split, no recording identifier.**
+
+### 2. The shipped class ordering is wrong - the most dangerous thing in this dataset
+
+The download carries **two contradictory orderings** (`classes.txt` vs `classes-fixed.*`) and
+the HDF5 has no metadata to arbitrate. Using the wrong one mislabels every frame while nothing
+crashes. Settled by measurement:
+
+* **impropriety `|E[x^2]|/E[|x|^2]` agrees with the FIXED ordering 24/24, and with the shipped
+  one 10/24.** Indices 0-3 measure 0.99/0.99/0.99/1.00 - real-valued constellations, i.e.
+  OOK/4ASK/8ASK/BPSK, not the shipped 32PSK/16APSK/32QAM/FM.
+* index 21 has amplitude CV **0.007**, a perfectly constant envelope: FM, and impossible for
+  the shipped AM-DSB-WC.
+* index 22 has CV 0.107: GMSK, impossible for the shipped OOK.
+* indices 19/20 have spectral asymmetry exactly **0.000**, as DSB must.
+* **independent confirmation** sharing no assumption with the above: the M-th power moment
+  peaks at **M = 2, 4, 8** for indices 3, 4, 5 - BPSK, QPSK, 8PSK. (16PSK/32PSK inconclusive,
+  not contradictory: ~100 symbols per frame plus RadioML's deliberate carrier offset destroy
+  16th/32nd-order moments.)
+
+**`radioml2018.CLASSES` is the fixed ordering; the shipped one is kept as
+`SHIPPED_WRONG_ORDER` only so a test can assert it is not in use.**
+
+**Two of my own checks misfired and are not counted as evidence**: a zero-amplitude-fraction
+test failed to isolate OOK (pulse shaping fills the "off" symbols), and FM outranked the
+AM-SSB classes on spectral asymmetry.
+
+### 3. Leakage - three mechanisms tested, ALL ABSENT
+
+Measured against a **phase-randomised surrogate null**, the corrected methodology from Entry
+045 (the naive `1/sqrt(N)` floor is wrong for bandlimited frames).
+
+| test | result |
+|---|---|
+| L1 SNR levels share a waveform? | **no** - matched-offset correlation 0.048-0.083, indistinguishable from shuffled and from the null |
+| L2 frames contiguous in time? | **no** - adjacent (k,k+1) = far-apart = null |
+| L3 near-duplicates > 0.9 | **0.0% in every class tested** |
+| L4 exact duplicates | **0** in 9,000 frames |
+
+Compare Dataset 1, where **48% of QAM test frames** had a near-duplicate in train. **A
+stratified random split is defensible here, which it never was on Dataset 1.**
+
+**Caveat that must travel with the numbers**: no recording identifiers exist, so recording-level
+independence is *inferred from the absence of its symptoms*, not guaranteed by metadata.
+
+### 4. Split, contract, and label overlap
+
+Each 4096-frame block partitioned **contiguously** (train 0-2867, val 2867-3481, **test
+3481-4096 SEALED**) - contiguous *because* L2 proved frames carry no temporal order, so it is
+equivalent to random and reads sequentially from a 21 GB file. Stratified over class and SNR by
+construction.
+
+**Five classes map exactly** (up from three on Dataset 1): BPSK, QPSK, 8PSK, 16QAM->QAM16,
+64QAM->QAM64. **GMSK still not mapped to GFSK.** **4ASK NOT mapped to PAM4**: RadioML's 4ASK
+measures 68% DC (unipolar), PAM4 is bipolar - and my direct comparison probe was **broken**
+(`level_profile` subtracted the per-frame mean, destroying the very DC under test), so this is
+**unresolved and therefore unmapped**.
+
+Production input contract unchanged and now **verified**: `build_windows` is asserted
+element-for-element against the runtime path, and `tests/test_realworld_training.py` **passes**
+- it had never been executed when Entry 045 was written. That closes Entry 045's open item #1.
+
+### 5. GPU - sm_120 confirmed, not just `is_available()`
+
+`training/device.verify_cuda` refuses to return a CPU device. Verified: torch **2.13.0+cu130**,
+CUDA 13.0/cuDNN 92000, **RTX 5060 Laptop GPU sm_120**, arch list
+`['sm_75','sm_80','sm_86','sm_90','sm_100','sm_120']` - **exact sm_120 kernels present** - real
+matmul checked against CPU (max err 6.9e-05), optimiser step changes weights.
+
+**49,767 windows/s training vs 1,951 on CPU: 25x.** Entry 045's GPU concern is resolved.
+
+### 6. RESULTS - real-data training closes the domain gap
+
+374,400 train / 62,400 val frames, 30 epochs, batch 1024, Adam 1e-3, seed 20260911, ~14 min
+each. **Sealed test split**, never read during training or selection.
+
+| model | 5 mappable classes | full 24-class |
+|---|---|---|
+| **frozen V3, zero training** | **15.97%** | n/a (8 outputs) |
+| linear_probe (V3 trunk frozen) | 30.19% | 33.17% |
+| **finetune (candidate)** | **44.46%** | **42.62%** |
+| scratch (control) | 38.49% | 40.73% |
+
+Each model answers across **its own full label space** - V3 among 8, the rest among 24 - so
+none is given an easier task. Chance on 24 classes is 4.17%.
+
+**Against the interpretation fixed in advance:**
+
+1. **V3's features transfer partially but are not directly reusable.** The linear probe reaches
+   30-33% - double V3's own end-to-end 15.97%, but 10+ points below unfreezing the trunk.
+2. **Synthetic pre-training is a modest help, not a head start**: finetune beats scratch by
+   **6.0 points** (mappable) and **1.9 points** (full 24). Most of the gain comes from real
+   data, not from where training started.
+3. **The domain gap closes**: 15.97% -> 44.46% on identical frames, **2.8x**.
+
+**By SNR (finetune, 24-class): mean 67.06% at >= +10 dB, 4.92% at <= -10 dB (chance 4.17%).**
+The 42.62% overall averages across a dataset half of which sits at or below 0 dB, where 128
+samples carry almost nothing. Monotone through the transition, flat above +10 dB.
+
+**Failures are structured, not random** - every one collapses onto an adjacent member of its
+own family: 16PSK 0.0% -> 32PSK, 64QAM 0.2% -> 256QAM, 128QAM 1.3% -> 256QAM, AM-SSB-SC 12.0%
+-> AM-SSB-WC, AM-DSB-SC 14.6% -> AM-DSB-WC. Same information-limited pattern Entry 041
+established for QAM16/QAM64: 128 samples at sps ~10 is ~12 symbols, which cannot separate those
+pairs regardless of model. Best: FM 86.4%, GMSK 77.1%, AM-SSB-WC 72.6%, BPSK 66.0%.
+
+**Confidence behaviour is the clearest win.** All three trained models produce **zero
+confident-wrong predictions above 0.9**. The candidate's wrong answers sit at median confidence
+**0.058** and never exceed **0.588**, against 0.867 when correct - a usable rejection threshold.
+The frozen V3 on the same data had 798 wrong above 0.9 and a maximum of 1.000. On Dataset 1 its
+calibration actually **inverted**; here nothing inverts.
+
+### Honest limits
+
+* **128 samples, not 1024.** Published RadioML 2018.01A results use the full frame and far
+  larger networks, reporting ~95% at high SNR and ~60% overall. This model sees **1/8 the
+  context** with **140,504 parameters** because that is the frozen production contract. 67% at
+  >= +10 dB under that constraint is reasonable, **not** state of the art, and must never be
+  presented as beating published figures.
+* Nothing was tuned on the test split; no threshold fitted anywhere.
+* **The candidate is NOT promoted.** It has a 24-class label space the current 8-class pipeline
+  does not consume. Promotion is a separate decision.
+
+### Process failures worth recording
+
+* I launched the runner twice, because Git-Bash `ps`/`pgrep` cannot see Windows processes and a
+  `grep -v` pipe swallowed the first runner's stdout - so I wrongly concluded it had died. Both
+  wrote to the same checkpoint paths for a time. Detected via the metrics file
+  (`per_config_train: 600` identified which runner produced it), second runner killed, first
+  (more data, further along) kept. **On Windows, verify processes with `Get-CimInstance
+  Win32_Process`, and never pipe a long job's output through `grep`.**
+* The first full-scale attempt was killed by the OS with no traceback: `load_indices` did
+  `handle["X"][indices].astype("float16")` on a float32 dataset, allocating a **3.1 GB
+  temporary beside the 1.5 GB result**. Fixed by chunked casting (`READ_CHUNK = 20_000`);
+  measured RSS growth fell from ~4.6 GB to 1.58 GB.
+
+### Provenance
+
+| run | sha256 | best epoch | val | seconds |
+|---|---|---|---|---|
+| linear_probe | `49e49224cbf686f6` | 20 | 0.3299 | 860 |
+| finetune | `cecbd88c7a059275` | 27 | 0.4288 | 831 |
+| scratch | `09c0d62b856ad187` | 27 | 0.4116 | 834 |
+
+All share train-index digest `b6a53edd6a9eb90d` - identical frames, so the comparison is
+controlled. Metrics in `models_saved/modulation_cnn_radioml_*_metrics.json` and
+`reports/radioml2018_experiments.json`.
+
+### Next step
+
+1. Decide whether a 24-class (or reduced digital-only) real-data model should become a second
+   production route alongside the 8-class synthetic one. They have different label spaces; this
+   is a product decision, not a metric one.
+2. The 128-sample contract is now the binding constraint, not the data. Entry 041 said the
+   lever for QAM16/QAM64 is capture length; this entry says the same for 16PSK/32PSK and
+   64QAM/256QAM. **Measure a 256- or 512-sample variant before any further architecture work.**
+3. Dataset 1's transfer hypotheses (RRC, sps 10, impairments) remain unattributed and still
+   separable synthetically at no data cost.
+4. `docs/REALWORLD_DATASET.md` section 16 items 2-6 are still open for Dataset 1.

@@ -1,0 +1,385 @@
+{
+  "model_sha256": "09c0d62b856ad18773260bba6fc80a81c1d6fb73da4884183ab73d46d1aa9ce5",
+  "mode": "scratch",
+  "label": "random initialisation, control",
+  "dataset": {
+    "name": "RadioML 2018.01A",
+    "path": "C:\\Users\\Kaustubh Bhoir\\Documents\\RadioFry\\dataset 2",
+    "file": "GOLD_XYZ_OSC.0001_1024.hdf5",
+    "class_ordering": "measured FIXED ordering (BANK Entry 047)"
+  },
+  "classes": [
+    "OOK",
+    "4ASK",
+    "8ASK",
+    "BPSK",
+    "QPSK",
+    "8PSK",
+    "16PSK",
+    "32PSK",
+    "16APSK",
+    "32APSK",
+    "64APSK",
+    "128APSK",
+    "16QAM",
+    "32QAM",
+    "64QAM",
+    "128QAM",
+    "256QAM",
+    "AM-SSB-WC",
+    "AM-SSB-SC",
+    "AM-DSB-WC",
+    "AM-DSB-SC",
+    "FM",
+    "GMSK",
+    "OQPSK"
+  ],
+  "snr_db": [
+    -20,
+    -18,
+    -16,
+    -14,
+    -12,
+    -10,
+    -8,
+    -6,
+    -4,
+    -2,
+    0,
+    2,
+    4,
+    6,
+    8,
+    10,
+    12,
+    14,
+    16,
+    18,
+    20,
+    22,
+    24,
+    26,
+    28,
+    30
+  ],
+  "split": {
+    "bounds": {
+      "test": [
+        3481,
+        4096
+      ],
+      "train": [
+        0,
+        2867
+      ],
+      "val": [
+        2867,
+        3481
+      ]
+    },
+    "fractions": {
+      "test": 0.15,
+      "train": 0.7,
+      "val": 0.15
+    },
+    "justification": "frames within a block carry no temporal order (measured)",
+    "protocol": "contiguous partition within each (class, SNR) block",
+    "sealed": "test"
+  },
+  "recording_grouping": "none available - RadioML publishes no capture identifier; independence inferred from measured absence of cross-SNR waveform reuse, temporal contiguity and near-duplicates",
+  "sealed_split": "test",
+  "initialisation": "random initialisation",
+  "architecture": "ModulationCNN(input_channels=4, num_classes=24)",
+  "input_contract": {
+    "frame_length": 128,
+    "channels": "iqap",
+    "inference_windows": 4,
+    "window_starts": [
+      0,
+      298,
+      597,
+      896
+    ],
+    "training_windows": "one random start per frame per epoch"
+  },
+  "seed": 20260911,
+  "epochs": 30,
+  "batch_size": 1024,
+  "optimiser": "Adam",
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "scheduler": "ReduceLROnPlateau(factor=0.5, patience=2)",
+  "train_frames": 374400,
+  "validation_frames": 62400,
+  "per_config_train": 600,
+  "per_config_validation": 100,
+  "train_snr_distribution": {
+    "-20": 14400,
+    "-18": 14400,
+    "-16": 14400,
+    "-14": 14400,
+    "-12": 14400,
+    "-10": 14400,
+    "-8": 14400,
+    "-6": 14400,
+    "-4": 14400,
+    "-2": 14400,
+    "0": 14400,
+    "2": 14400,
+    "4": 14400,
+    "6": 14400,
+    "8": 14400,
+    "10": 14400,
+    "12": 14400,
+    "14": 14400,
+    "16": 14400,
+    "18": 14400,
+    "20": 14400,
+    "22": 14400,
+    "24": 14400,
+    "26": 14400,
+    "28": 14400,
+    "30": 14400
+  },
+  "device": {
+    "ok": true,
+    "device": "cuda",
+    "torch": "2.13.0+cu130",
+    "cuda": "13.0",
+    "cudnn": "92000",
+    "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+    "capability": "120",
+    "arch_list": [
+      "sm_75",
+      "sm_80",
+      "sm_86",
+      "sm_90",
+      "sm_100",
+      "sm_120"
+    ],
+    "total_memory_gb": 8.55,
+    "checks": [
+      "torch 2.13.0+cu130, built against CUDA 13.0",
+      "torch.cuda.is_available() = True",
+      "device 0: NVIDIA GeForce RTX 5060 Laptop GPU, sm_120, 8.5 GB",
+      "arch list ['sm_75', 'sm_80', 'sm_86', 'sm_90', 'sm_100', 'sm_120']",
+      "exact sm_120 kernels present",
+      "matmul kernel launched and synchronised on device",
+      "forward/backward/step on device changed the weights (loss 2.1232)",
+      "peak GPU memory during smoke test: 2244.4 MB"
+    ],
+    "failure": ""
+  },
+  "environment": {
+    "python": "3.14.5",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "torch": "2.13.0+cu130",
+    "torch_cuda": "13.0",
+    "cuda_available": true,
+    "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+    "capability": "sm_120",
+    "arch_list": [
+      "sm_75",
+      "sm_80",
+      "sm_86",
+      "sm_90",
+      "sm_100",
+      "sm_120"
+    ]
+  },
+  "elapsed_seconds": 864.4845108000009,
+  "training_seconds": 834.3521035999984,
+  "best_epoch": 27,
+  "best_validation_accuracy": 0.4115865384615385,
+  "history": [
+    {
+      "epoch": 0,
+      "train_loss": 2.2686777692778497,
+      "validation_accuracy": 0.29376602564102566,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 1,
+      "train_loss": 2.02943911527976,
+      "validation_accuracy": 0.3350961538461538,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 2,
+      "train_loss": 1.9818547439982748,
+      "validation_accuracy": 0.3459615384615385,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 3,
+      "train_loss": 1.951985974108052,
+      "validation_accuracy": 0.3474839743589744,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 4,
+      "train_loss": 1.933349688358796,
+      "validation_accuracy": 0.35504807692307694,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 5,
+      "train_loss": 1.920555370933989,
+      "validation_accuracy": 0.3624198717948718,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 6,
+      "train_loss": 1.9080890476601755,
+      "validation_accuracy": 0.3697916666666667,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 7,
+      "train_loss": 1.896448610827454,
+      "validation_accuracy": 0.3832051282051282,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 8,
+      "train_loss": 1.8887083082117586,
+      "validation_accuracy": 0.384599358974359,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 9,
+      "train_loss": 1.882000924175621,
+      "validation_accuracy": 0.3829967948717949,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 10,
+      "train_loss": 1.8763825881175507,
+      "validation_accuracy": 0.37809294871794874,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 11,
+      "train_loss": 1.8704314728272267,
+      "validation_accuracy": 0.3719551282051282,
+      "learning_rate": 0.0005
+    },
+    {
+      "epoch": 12,
+      "train_loss": 1.8570297892888388,
+      "validation_accuracy": 0.3898397435897436,
+      "learning_rate": 0.0005
+    },
+    {
+      "epoch": 13,
+      "train_loss": 1.85400644608033,
+      "validation_accuracy": 0.3868108974358974,
+      "learning_rate": 0.0005
+    },
+    {
+      "epoch": 14,
+      "train_loss": 1.8513885660660572,
+      "validation_accuracy": 0.3978846153846154,
+      "learning_rate": 0.0005
+    },
+    {
+      "epoch": 15,
+      "train_loss": 1.848107694560646,
+      "validation_accuracy": 0.40134615384615385,
+      "learning_rate": 0.0005
+    },
+    {
+      "epoch": 16,
+      "train_loss": 1.8460116407606337,
+      "validation_accuracy": 0.399150641025641,
+      "learning_rate": 0.0005
+    },
+    {
+      "epoch": 17,
+      "train_loss": 1.8433827956517537,
+      "validation_accuracy": 0.3919391025641026,
+      "learning_rate": 0.0005
+    },
+    {
+      "epoch": 18,
+      "train_loss": 1.8435600593354966,
+      "validation_accuracy": 0.39003205128205126,
+      "learning_rate": 0.00025
+    },
+    {
+      "epoch": 19,
+      "train_loss": 1.8345398536095252,
+      "validation_accuracy": 0.40344551282051283,
+      "learning_rate": 0.00025
+    },
+    {
+      "epoch": 20,
+      "train_loss": 1.832903468384702,
+      "validation_accuracy": 0.4064102564102564,
+      "learning_rate": 0.00025
+    },
+    {
+      "epoch": 21,
+      "train_loss": 1.8322288297995544,
+      "validation_accuracy": 0.40262820512820513,
+      "learning_rate": 0.00025
+    },
+    {
+      "epoch": 22,
+      "train_loss": 1.8318424792167467,
+      "validation_accuracy": 0.3960897435897436,
+      "learning_rate": 0.00025
+    },
+    {
+      "epoch": 23,
+      "train_loss": 1.830598681441739,
+      "validation_accuracy": 0.40310897435897436,
+      "learning_rate": 0.000125
+    },
+    {
+      "epoch": 24,
+      "train_loss": 1.8266196843497773,
+      "validation_accuracy": 0.4074519230769231,
+      "learning_rate": 0.000125
+    },
+    {
+      "epoch": 25,
+      "train_loss": 1.824944217959021,
+      "validation_accuracy": 0.4042147435897436,
+      "learning_rate": 0.000125
+    },
+    {
+      "epoch": 26,
+      "train_loss": 1.824603099945264,
+      "validation_accuracy": 0.40963141025641026,
+      "learning_rate": 0.000125
+    },
+    {
+      "epoch": 27,
+      "train_loss": 1.8234893606870601,
+      "validation_accuracy": 0.4115865384615385,
+      "learning_rate": 0.000125
+    },
+    {
+      "epoch": 28,
+      "train_loss": 1.8243145266149798,
+      "validation_accuracy": 0.4082692307692308,
+      "learning_rate": 0.000125
+    },
+    {
+      "epoch": 29,
+      "train_loss": 1.8235520908160088,
+      "validation_accuracy": 0.4099038461538462,
+      "learning_rate": 0.000125
+    }
+  ],
+  "train_indices_sha256": "b6a53edd6a9eb90dfb386b1e50edcd53b1f774e7ebd909b28a764203a13a0f01",
+  "validation_indices_sha256": "f4170959ce6f386b507392e4762148e0d71ff4065b51de53c7389cb820670491",
+  "radiofry_label_map": {
+    "BPSK": "BPSK",
+    "QPSK": "QPSK",
+    "8PSK": "8PSK",
+    "16QAM": "QAM16",
+    "64QAM": "QAM64"
+  }
+}

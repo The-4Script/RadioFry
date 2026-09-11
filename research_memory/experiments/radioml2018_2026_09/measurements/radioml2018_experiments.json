@@ -1,0 +1,5280 @@
+{
+  "device": {
+    "ok": true,
+    "device": "cuda",
+    "torch": "2.13.0+cu130",
+    "cuda": "13.0",
+    "cudnn": "92000",
+    "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+    "capability": "120",
+    "arch_list": [
+      "sm_75",
+      "sm_80",
+      "sm_86",
+      "sm_90",
+      "sm_100",
+      "sm_120"
+    ],
+    "total_memory_gb": 8.55,
+    "checks": [
+      "torch 2.13.0+cu130, built against CUDA 13.0",
+      "torch.cuda.is_available() = True",
+      "device 0: NVIDIA GeForce RTX 5060 Laptop GPU, sm_120, 8.5 GB",
+      "arch list ['sm_75', 'sm_80', 'sm_86', 'sm_90', 'sm_100', 'sm_120']",
+      "exact sm_120 kernels present",
+      "matmul kernel launched and synchronised on device",
+      "forward/backward/step on device changed the weights (loss 2.0915)",
+      "peak GPU memory during smoke test: 111.4 MB"
+    ],
+    "failure": ""
+  },
+  "train_linear_probe": {
+    "model_sha256": "49e49224cbf686f63b6c9a157d0e69dfc85960c2ad7cdd6cf29a1fa99b2ac56d",
+    "mode": "linear_probe",
+    "label": "V3 trunk FROZEN, new 24-class head",
+    "dataset": {
+      "name": "RadioML 2018.01A",
+      "path": "C:\\Users\\Kaustubh Bhoir\\Documents\\RadioFry\\dataset 2",
+      "file": "GOLD_XYZ_OSC.0001_1024.hdf5",
+      "class_ordering": "measured FIXED ordering (BANK Entry 047)"
+    },
+    "classes": [
+      "OOK",
+      "4ASK",
+      "8ASK",
+      "BPSK",
+      "QPSK",
+      "8PSK",
+      "16PSK",
+      "32PSK",
+      "16APSK",
+      "32APSK",
+      "64APSK",
+      "128APSK",
+      "16QAM",
+      "32QAM",
+      "64QAM",
+      "128QAM",
+      "256QAM",
+      "AM-SSB-WC",
+      "AM-SSB-SC",
+      "AM-DSB-WC",
+      "AM-DSB-SC",
+      "FM",
+      "GMSK",
+      "OQPSK"
+    ],
+    "snr_db": [
+      -20,
+      -18,
+      -16,
+      -14,
+      -12,
+      -10,
+      -8,
+      -6,
+      -4,
+      -2,
+      0,
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16,
+      18,
+      20,
+      22,
+      24,
+      26,
+      28,
+      30
+    ],
+    "split": {
+      "bounds": {
+        "test": [
+          3481,
+          4096
+        ],
+        "train": [
+          0,
+          2867
+        ],
+        "val": [
+          2867,
+          3481
+        ]
+      },
+      "fractions": {
+        "test": 0.15,
+        "train": 0.7,
+        "val": 0.15
+      },
+      "justification": "frames within a block carry no temporal order (measured)",
+      "protocol": "contiguous partition within each (class, SNR) block",
+      "sealed": "test"
+    },
+    "recording_grouping": "none available - RadioML publishes no capture identifier; independence inferred from measured absence of cross-SNR waveform reuse, temporal contiguity and near-duplicates",
+    "sealed_split": "test",
+    "initialisation": "modulation_cnn_v3_spsaug.pt trunk only (21 tensors); head is new for 24 classes",
+    "architecture": "ModulationCNN(input_channels=4, num_classes=24)",
+    "input_contract": {
+      "frame_length": 128,
+      "channels": "iqap",
+      "inference_windows": 4,
+      "window_starts": [
+        0,
+        298,
+        597,
+        896
+      ],
+      "training_windows": "one random start per frame per epoch"
+    },
+    "seed": 20260911,
+    "epochs": 30,
+    "batch_size": 1024,
+    "optimiser": "Adam",
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "scheduler": "ReduceLROnPlateau(factor=0.5, patience=2)",
+    "train_frames": 374400,
+    "validation_frames": 62400,
+    "per_config_train": 600,
+    "per_config_validation": 100,
+    "train_snr_distribution": {
+      "-20": 14400,
+      "-18": 14400,
+      "-16": 14400,
+      "-14": 14400,
+      "-12": 14400,
+      "-10": 14400,
+      "-8": 14400,
+      "-6": 14400,
+      "-4": 14400,
+      "-2": 14400,
+      "0": 14400,
+      "2": 14400,
+      "4": 14400,
+      "6": 14400,
+      "8": 14400,
+      "10": 14400,
+      "12": 14400,
+      "14": 14400,
+      "16": 14400,
+      "18": 14400,
+      "20": 14400,
+      "22": 14400,
+      "24": 14400,
+      "26": 14400,
+      "28": 14400,
+      "30": 14400
+    },
+    "device": {
+      "ok": true,
+      "device": "cuda",
+      "torch": "2.13.0+cu130",
+      "cuda": "13.0",
+      "cudnn": "92000",
+      "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+      "capability": "120",
+      "arch_list": [
+        "sm_75",
+        "sm_80",
+        "sm_86",
+        "sm_90",
+        "sm_100",
+        "sm_120"
+      ],
+      "total_memory_gb": 8.55,
+      "checks": [
+        "torch 2.13.0+cu130, built against CUDA 13.0",
+        "torch.cuda.is_available() = True",
+        "device 0: NVIDIA GeForce RTX 5060 Laptop GPU, sm_120, 8.5 GB",
+        "arch list ['sm_75', 'sm_80', 'sm_86', 'sm_90', 'sm_100', 'sm_120']",
+        "exact sm_120 kernels present",
+        "matmul kernel launched and synchronised on device",
+        "forward/backward/step on device changed the weights (loss 2.1030)",
+        "peak GPU memory during smoke test: 111.4 MB"
+      ],
+      "failure": ""
+    },
+    "environment": {
+      "python": "3.14.5",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "torch": "2.13.0+cu130",
+      "torch_cuda": "13.0",
+      "cuda_available": true,
+      "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+      "capability": "sm_120",
+      "arch_list": [
+        "sm_75",
+        "sm_80",
+        "sm_86",
+        "sm_90",
+        "sm_100",
+        "sm_120"
+      ]
+    },
+    "elapsed_seconds": 891.0460877999976,
+    "training_seconds": 859.6268181999985,
+    "best_epoch": 20,
+    "best_validation_accuracy": 0.32987179487179485,
+    "train_indices_sha256": "b6a53edd6a9eb90dfb386b1e50edcd53b1f774e7ebd909b28a764203a13a0f01",
+    "validation_indices_sha256": "f4170959ce6f386b507392e4762148e0d71ff4065b51de53c7389cb820670491",
+    "radiofry_label_map": {
+      "BPSK": "BPSK",
+      "QPSK": "QPSK",
+      "8PSK": "8PSK",
+      "16QAM": "QAM16",
+      "64QAM": "QAM64"
+    },
+    "history_tail": [
+      {
+        "epoch": 25,
+        "train_loss": 2.053573937456832,
+        "validation_accuracy": 0.32453525641025643,
+        "learning_rate": 6.25e-05
+      },
+      {
+        "epoch": 26,
+        "train_loss": 2.0536219406943035,
+        "validation_accuracy": 0.32889423076923074,
+        "learning_rate": 3.125e-05
+      },
+      {
+        "epoch": 27,
+        "train_loss": 2.052539412506625,
+        "validation_accuracy": 0.32855769230769233,
+        "learning_rate": 3.125e-05
+      },
+      {
+        "epoch": 28,
+        "train_loss": 2.052661579653748,
+        "validation_accuracy": 0.3247275641025641,
+        "learning_rate": 3.125e-05
+      },
+      {
+        "epoch": 29,
+        "train_loss": 2.0523966407775878,
+        "validation_accuracy": 0.32482371794871795,
+        "learning_rate": 1.5625e-05
+      }
+    ]
+  },
+  "train_finetune": {
+    "model_sha256": "cecbd88c7a0592753540776101a86836048853a43da597575ec96ea3ef397d3c",
+    "mode": "finetune",
+    "label": "V3 trunk trainable, new 24-class head",
+    "dataset": {
+      "name": "RadioML 2018.01A",
+      "path": "C:\\Users\\Kaustubh Bhoir\\Documents\\RadioFry\\dataset 2",
+      "file": "GOLD_XYZ_OSC.0001_1024.hdf5",
+      "class_ordering": "measured FIXED ordering (BANK Entry 047)"
+    },
+    "classes": [
+      "OOK",
+      "4ASK",
+      "8ASK",
+      "BPSK",
+      "QPSK",
+      "8PSK",
+      "16PSK",
+      "32PSK",
+      "16APSK",
+      "32APSK",
+      "64APSK",
+      "128APSK",
+      "16QAM",
+      "32QAM",
+      "64QAM",
+      "128QAM",
+      "256QAM",
+      "AM-SSB-WC",
+      "AM-SSB-SC",
+      "AM-DSB-WC",
+      "AM-DSB-SC",
+      "FM",
+      "GMSK",
+      "OQPSK"
+    ],
+    "snr_db": [
+      -20,
+      -18,
+      -16,
+      -14,
+      -12,
+      -10,
+      -8,
+      -6,
+      -4,
+      -2,
+      0,
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16,
+      18,
+      20,
+      22,
+      24,
+      26,
+      28,
+      30
+    ],
+    "split": {
+      "bounds": {
+        "test": [
+          3481,
+          4096
+        ],
+        "train": [
+          0,
+          2867
+        ],
+        "val": [
+          2867,
+          3481
+        ]
+      },
+      "fractions": {
+        "test": 0.15,
+        "train": 0.7,
+        "val": 0.15
+      },
+      "justification": "frames within a block carry no temporal order (measured)",
+      "protocol": "contiguous partition within each (class, SNR) block",
+      "sealed": "test"
+    },
+    "recording_grouping": "none available - RadioML publishes no capture identifier; independence inferred from measured absence of cross-SNR waveform reuse, temporal contiguity and near-duplicates",
+    "sealed_split": "test",
+    "initialisation": "modulation_cnn_v3_spsaug.pt trunk only (21 tensors); head is new for 24 classes",
+    "architecture": "ModulationCNN(input_channels=4, num_classes=24)",
+    "input_contract": {
+      "frame_length": 128,
+      "channels": "iqap",
+      "inference_windows": 4,
+      "window_starts": [
+        0,
+        298,
+        597,
+        896
+      ],
+      "training_windows": "one random start per frame per epoch"
+    },
+    "seed": 20260911,
+    "epochs": 30,
+    "batch_size": 1024,
+    "optimiser": "Adam",
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "scheduler": "ReduceLROnPlateau(factor=0.5, patience=2)",
+    "train_frames": 374400,
+    "validation_frames": 62400,
+    "per_config_train": 600,
+    "per_config_validation": 100,
+    "train_snr_distribution": {
+      "-20": 14400,
+      "-18": 14400,
+      "-16": 14400,
+      "-14": 14400,
+      "-12": 14400,
+      "-10": 14400,
+      "-8": 14400,
+      "-6": 14400,
+      "-4": 14400,
+      "-2": 14400,
+      "0": 14400,
+      "2": 14400,
+      "4": 14400,
+      "6": 14400,
+      "8": 14400,
+      "10": 14400,
+      "12": 14400,
+      "14": 14400,
+      "16": 14400,
+      "18": 14400,
+      "20": 14400,
+      "22": 14400,
+      "24": 14400,
+      "26": 14400,
+      "28": 14400,
+      "30": 14400
+    },
+    "device": {
+      "ok": true,
+      "device": "cuda",
+      "torch": "2.13.0+cu130",
+      "cuda": "13.0",
+      "cudnn": "92000",
+      "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+      "capability": "120",
+      "arch_list": [
+        "sm_75",
+        "sm_80",
+        "sm_86",
+        "sm_90",
+        "sm_100",
+        "sm_120"
+      ],
+      "total_memory_gb": 8.55,
+      "checks": [
+        "torch 2.13.0+cu130, built against CUDA 13.0",
+        "torch.cuda.is_available() = True",
+        "device 0: NVIDIA GeForce RTX 5060 Laptop GPU, sm_120, 8.5 GB",
+        "arch list ['sm_75', 'sm_80', 'sm_86', 'sm_90', 'sm_100', 'sm_120']",
+        "exact sm_120 kernels present",
+        "matmul kernel launched and synchronised on device",
+        "forward/backward/step on device changed the weights (loss 2.1232)",
+        "peak GPU memory during smoke test: 2243.2 MB"
+      ],
+      "failure": ""
+    },
+    "environment": {
+      "python": "3.14.5",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "torch": "2.13.0+cu130",
+      "torch_cuda": "13.0",
+      "cuda_available": true,
+      "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+      "capability": "sm_120",
+      "arch_list": [
+        "sm_75",
+        "sm_80",
+        "sm_86",
+        "sm_90",
+        "sm_100",
+        "sm_120"
+      ]
+    },
+    "elapsed_seconds": 855.3036675000003,
+    "training_seconds": 831.2211549999993,
+    "best_epoch": 27,
+    "best_validation_accuracy": 0.4288461538461538,
+    "train_indices_sha256": "b6a53edd6a9eb90dfb386b1e50edcd53b1f774e7ebd909b28a764203a13a0f01",
+    "validation_indices_sha256": "f4170959ce6f386b507392e4762148e0d71ff4065b51de53c7389cb820670491",
+    "radiofry_label_map": {
+      "BPSK": "BPSK",
+      "QPSK": "QPSK",
+      "8PSK": "8PSK",
+      "16QAM": "QAM16",
+      "64QAM": "QAM64"
+    },
+    "history_tail": [
+      {
+        "epoch": 25,
+        "train_loss": 1.8309823607990885,
+        "validation_accuracy": 0.4235576923076923,
+        "learning_rate": 0.0005
+      },
+      {
+        "epoch": 26,
+        "train_loss": 1.8279598695803911,
+        "validation_accuracy": 0.42213141025641027,
+        "learning_rate": 0.0005
+      },
+      {
+        "epoch": 27,
+        "train_loss": 1.8260050091376672,
+        "validation_accuracy": 0.4288461538461538,
+        "learning_rate": 0.0005
+      },
+      {
+        "epoch": 28,
+        "train_loss": 1.8253357148374247,
+        "validation_accuracy": 0.42173076923076924,
+        "learning_rate": 0.0005
+      },
+      {
+        "epoch": 29,
+        "train_loss": 1.8236710419206539,
+        "validation_accuracy": 0.42262820512820515,
+        "learning_rate": 0.0005
+      }
+    ]
+  },
+  "train_scratch": {
+    "model_sha256": "09c0d62b856ad18773260bba6fc80a81c1d6fb73da4884183ab73d46d1aa9ce5",
+    "mode": "scratch",
+    "label": "random initialisation, control",
+    "dataset": {
+      "name": "RadioML 2018.01A",
+      "path": "C:\\Users\\Kaustubh Bhoir\\Documents\\RadioFry\\dataset 2",
+      "file": "GOLD_XYZ_OSC.0001_1024.hdf5",
+      "class_ordering": "measured FIXED ordering (BANK Entry 047)"
+    },
+    "classes": [
+      "OOK",
+      "4ASK",
+      "8ASK",
+      "BPSK",
+      "QPSK",
+      "8PSK",
+      "16PSK",
+      "32PSK",
+      "16APSK",
+      "32APSK",
+      "64APSK",
+      "128APSK",
+      "16QAM",
+      "32QAM",
+      "64QAM",
+      "128QAM",
+      "256QAM",
+      "AM-SSB-WC",
+      "AM-SSB-SC",
+      "AM-DSB-WC",
+      "AM-DSB-SC",
+      "FM",
+      "GMSK",
+      "OQPSK"
+    ],
+    "snr_db": [
+      -20,
+      -18,
+      -16,
+      -14,
+      -12,
+      -10,
+      -8,
+      -6,
+      -4,
+      -2,
+      0,
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16,
+      18,
+      20,
+      22,
+      24,
+      26,
+      28,
+      30
+    ],
+    "split": {
+      "bounds": {
+        "test": [
+          3481,
+          4096
+        ],
+        "train": [
+          0,
+          2867
+        ],
+        "val": [
+          2867,
+          3481
+        ]
+      },
+      "fractions": {
+        "test": 0.15,
+        "train": 0.7,
+        "val": 0.15
+      },
+      "justification": "frames within a block carry no temporal order (measured)",
+      "protocol": "contiguous partition within each (class, SNR) block",
+      "sealed": "test"
+    },
+    "recording_grouping": "none available - RadioML publishes no capture identifier; independence inferred from measured absence of cross-SNR waveform reuse, temporal contiguity and near-duplicates",
+    "sealed_split": "test",
+    "initialisation": "random initialisation",
+    "architecture": "ModulationCNN(input_channels=4, num_classes=24)",
+    "input_contract": {
+      "frame_length": 128,
+      "channels": "iqap",
+      "inference_windows": 4,
+      "window_starts": [
+        0,
+        298,
+        597,
+        896
+      ],
+      "training_windows": "one random start per frame per epoch"
+    },
+    "seed": 20260911,
+    "epochs": 30,
+    "batch_size": 1024,
+    "optimiser": "Adam",
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "scheduler": "ReduceLROnPlateau(factor=0.5, patience=2)",
+    "train_frames": 374400,
+    "validation_frames": 62400,
+    "per_config_train": 600,
+    "per_config_validation": 100,
+    "train_snr_distribution": {
+      "-20": 14400,
+      "-18": 14400,
+      "-16": 14400,
+      "-14": 14400,
+      "-12": 14400,
+      "-10": 14400,
+      "-8": 14400,
+      "-6": 14400,
+      "-4": 14400,
+      "-2": 14400,
+      "0": 14400,
+      "2": 14400,
+      "4": 14400,
+      "6": 14400,
+      "8": 14400,
+      "10": 14400,
+      "12": 14400,
+      "14": 14400,
+      "16": 14400,
+      "18": 14400,
+      "20": 14400,
+      "22": 14400,
+      "24": 14400,
+      "26": 14400,
+      "28": 14400,
+      "30": 14400
+    },
+    "device": {
+      "ok": true,
+      "device": "cuda",
+      "torch": "2.13.0+cu130",
+      "cuda": "13.0",
+      "cudnn": "92000",
+      "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+      "capability": "120",
+      "arch_list": [
+        "sm_75",
+        "sm_80",
+        "sm_86",
+        "sm_90",
+        "sm_100",
+        "sm_120"
+      ],
+      "total_memory_gb": 8.55,
+      "checks": [
+        "torch 2.13.0+cu130, built against CUDA 13.0",
+        "torch.cuda.is_available() = True",
+        "device 0: NVIDIA GeForce RTX 5060 Laptop GPU, sm_120, 8.5 GB",
+        "arch list ['sm_75', 'sm_80', 'sm_86', 'sm_90', 'sm_100', 'sm_120']",
+        "exact sm_120 kernels present",
+        "matmul kernel launched and synchronised on device",
+        "forward/backward/step on device changed the weights (loss 2.1232)",
+        "peak GPU memory during smoke test: 2244.4 MB"
+      ],
+      "failure": ""
+    },
+    "environment": {
+      "python": "3.14.5",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "torch": "2.13.0+cu130",
+      "torch_cuda": "13.0",
+      "cuda_available": true,
+      "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+      "capability": "sm_120",
+      "arch_list": [
+        "sm_75",
+        "sm_80",
+        "sm_86",
+        "sm_90",
+        "sm_100",
+        "sm_120"
+      ]
+    },
+    "elapsed_seconds": 864.4845108000009,
+    "training_seconds": 834.3521035999984,
+    "best_epoch": 27,
+    "best_validation_accuracy": 0.4115865384615385,
+    "train_indices_sha256": "b6a53edd6a9eb90dfb386b1e50edcd53b1f774e7ebd909b28a764203a13a0f01",
+    "validation_indices_sha256": "f4170959ce6f386b507392e4762148e0d71ff4065b51de53c7389cb820670491",
+    "radiofry_label_map": {
+      "BPSK": "BPSK",
+      "QPSK": "QPSK",
+      "8PSK": "8PSK",
+      "16QAM": "QAM16",
+      "64QAM": "QAM64"
+    },
+    "history_tail": [
+      {
+        "epoch": 25,
+        "train_loss": 1.824944217959021,
+        "validation_accuracy": 0.4042147435897436,
+        "learning_rate": 0.000125
+      },
+      {
+        "epoch": 26,
+        "train_loss": 1.824603099945264,
+        "validation_accuracy": 0.40963141025641026,
+        "learning_rate": 0.000125
+      },
+      {
+        "epoch": 27,
+        "train_loss": 1.8234893606870601,
+        "validation_accuracy": 0.4115865384615385,
+        "learning_rate": 0.000125
+      },
+      {
+        "epoch": 28,
+        "train_loss": 1.8243145266149798,
+        "validation_accuracy": 0.4082692307692308,
+        "learning_rate": 0.000125
+      },
+      {
+        "epoch": 29,
+        "train_loss": 1.8235520908160088,
+        "validation_accuracy": 0.4099038461538462,
+        "learning_rate": 0.000125
+      }
+    ]
+  },
+  "eval_linear_probe_mappable": {
+    "checkpoint": "models_saved\\modulation_cnn_radioml_linearprobe.pt",
+    "model_sha256": "49e49224cbf686f63b6c9a157d0e69dfc85960c2ad7cdd6cf29a1fa99b2ac56d",
+    "labels": [
+      "OOK",
+      "4ASK",
+      "8ASK",
+      "BPSK",
+      "QPSK",
+      "8PSK",
+      "16PSK",
+      "32PSK",
+      "16APSK",
+      "32APSK",
+      "64APSK",
+      "128APSK",
+      "16QAM",
+      "32QAM",
+      "64QAM",
+      "128QAM",
+      "256QAM",
+      "AM-SSB-WC",
+      "AM-SSB-SC",
+      "AM-DSB-WC",
+      "AM-DSB-SC",
+      "FM",
+      "GMSK",
+      "OQPSK"
+    ],
+    "frames": 15600,
+    "overall_accuracy": 0.3019230769230769,
+    "per_class": {
+      "16QAM": {
+        "n": 3120,
+        "accuracy": 0.11666666666666667,
+        "most_common_predictions": [
+          [
+            "16APSK",
+            390
+          ],
+          [
+            "16QAM",
+            364
+          ],
+          [
+            "OQPSK",
+            344
+          ],
+          [
+            "FM",
+            329
+          ]
+        ]
+      },
+      "64QAM": {
+        "n": 3120,
+        "accuracy": 0.000641025641025641,
+        "most_common_predictions": [
+          [
+            "32APSK",
+            516
+          ],
+          [
+            "FM",
+            322
+          ],
+          [
+            "OQPSK",
+            306
+          ],
+          [
+            "16QAM",
+            279
+          ]
+        ]
+      },
+      "8PSK": {
+        "n": 3120,
+        "accuracy": 0.14134615384615384,
+        "most_common_predictions": [
+          [
+            "32PSK",
+            996
+          ],
+          [
+            "8PSK",
+            441
+          ],
+          [
+            "QPSK",
+            424
+          ],
+          [
+            "FM",
+            335
+          ]
+        ]
+      },
+      "BPSK": {
+        "n": 3120,
+        "accuracy": 0.6426282051282052,
+        "most_common_predictions": [
+          [
+            "BPSK",
+            2005
+          ],
+          [
+            "FM",
+            285
+          ],
+          [
+            "AM-SSB-WC",
+            248
+          ],
+          [
+            "AM-DSB-SC",
+            196
+          ]
+        ]
+      },
+      "QPSK": {
+        "n": 3120,
+        "accuracy": 0.6083333333333333,
+        "most_common_predictions": [
+          [
+            "QPSK",
+            1898
+          ],
+          [
+            "FM",
+            319
+          ],
+          [
+            "AM-SSB-WC",
+            297
+          ],
+          [
+            "GMSK",
+            167
+          ]
+        ]
+      }
+    },
+    "per_snr": {
+      "-20": {
+        "n": 600,
+        "accuracy": 0.01
+      },
+      "-18": {
+        "n": 600,
+        "accuracy": 0.005
+      },
+      "-16": {
+        "n": 600,
+        "accuracy": 0.011666666666666667
+      },
+      "-14": {
+        "n": 600,
+        "accuracy": 0.008333333333333333
+      },
+      "-12": {
+        "n": 600,
+        "accuracy": 0.006666666666666667
+      },
+      "-10": {
+        "n": 600,
+        "accuracy": 0.015
+      },
+      "-8": {
+        "n": 600,
+        "accuracy": 0.015
+      },
+      "-6": {
+        "n": 600,
+        "accuracy": 0.025
+      },
+      "-4": {
+        "n": 600,
+        "accuracy": 0.04
+      },
+      "-2": {
+        "n": 600,
+        "accuracy": 0.11
+      },
+      "0": {
+        "n": 600,
+        "accuracy": 0.30333333333333334
+      },
+      "2": {
+        "n": 600,
+        "accuracy": 0.4533333333333333
+      },
+      "4": {
+        "n": 600,
+        "accuracy": 0.5216666666666666
+      },
+      "6": {
+        "n": 600,
+        "accuracy": 0.5283333333333333
+      },
+      "8": {
+        "n": 600,
+        "accuracy": 0.51
+      },
+      "10": {
+        "n": 600,
+        "accuracy": 0.49333333333333335
+      },
+      "12": {
+        "n": 600,
+        "accuracy": 0.4716666666666667
+      },
+      "14": {
+        "n": 600,
+        "accuracy": 0.48
+      },
+      "16": {
+        "n": 600,
+        "accuracy": 0.4683333333333333
+      },
+      "18": {
+        "n": 600,
+        "accuracy": 0.485
+      },
+      "20": {
+        "n": 600,
+        "accuracy": 0.4866666666666667
+      },
+      "22": {
+        "n": 600,
+        "accuracy": 0.4633333333333333
+      },
+      "24": {
+        "n": 600,
+        "accuracy": 0.49166666666666664
+      },
+      "26": {
+        "n": 600,
+        "accuracy": 0.4766666666666667
+      },
+      "28": {
+        "n": 600,
+        "accuracy": 0.48333333333333334
+      },
+      "30": {
+        "n": 600,
+        "accuracy": 0.4866666666666667
+      }
+    },
+    "confusion": {
+      "16QAM": {
+        "OOK": 144,
+        "4ASK": 53,
+        "8ASK": 22,
+        "BPSK": 63,
+        "QPSK": 136,
+        "8PSK": 35,
+        "16PSK": 3,
+        "32PSK": 110,
+        "16APSK": 390,
+        "32APSK": 322,
+        "64APSK": 1,
+        "128APSK": 79,
+        "16QAM": 364,
+        "32QAM": 138,
+        "128QAM": 1,
+        "256QAM": 61,
+        "AM-SSB-WC": 247,
+        "AM-SSB-SC": 31,
+        "AM-DSB-WC": 10,
+        "AM-DSB-SC": 117,
+        "FM": 329,
+        "GMSK": 120,
+        "OQPSK": 344
+      },
+      "64QAM": {
+        "OOK": 114,
+        "4ASK": 46,
+        "8ASK": 26,
+        "BPSK": 47,
+        "QPSK": 103,
+        "8PSK": 20,
+        "16PSK": 2,
+        "32PSK": 72,
+        "16APSK": 274,
+        "32APSK": 516,
+        "64APSK": 1,
+        "128APSK": 153,
+        "16QAM": 279,
+        "32QAM": 167,
+        "64QAM": 2,
+        "128QAM": 1,
+        "256QAM": 121,
+        "AM-SSB-WC": 264,
+        "AM-SSB-SC": 27,
+        "AM-DSB-WC": 15,
+        "AM-DSB-SC": 115,
+        "FM": 322,
+        "GMSK": 127,
+        "OQPSK": 306
+      },
+      "8PSK": {
+        "OOK": 108,
+        "4ASK": 46,
+        "8ASK": 16,
+        "BPSK": 52,
+        "QPSK": 424,
+        "8PSK": 441,
+        "16PSK": 17,
+        "32PSK": 996,
+        "16APSK": 5,
+        "16QAM": 1,
+        "256QAM": 1,
+        "AM-SSB-WC": 270,
+        "AM-SSB-SC": 24,
+        "AM-DSB-WC": 9,
+        "AM-DSB-SC": 101,
+        "FM": 335,
+        "GMSK": 222,
+        "OQPSK": 52
+      },
+      "BPSK": {
+        "OOK": 125,
+        "4ASK": 36,
+        "8ASK": 17,
+        "BPSK": 2005,
+        "QPSK": 26,
+        "16PSK": 1,
+        "32PSK": 3,
+        "16APSK": 14,
+        "128APSK": 3,
+        "AM-SSB-WC": 248,
+        "AM-SSB-SC": 24,
+        "AM-DSB-WC": 34,
+        "AM-DSB-SC": 196,
+        "FM": 285,
+        "GMSK": 95,
+        "OQPSK": 8
+      },
+      "QPSK": {
+        "OOK": 104,
+        "4ASK": 45,
+        "8ASK": 20,
+        "BPSK": 52,
+        "QPSK": 1898,
+        "8PSK": 7,
+        "16PSK": 7,
+        "32PSK": 23,
+        "16APSK": 17,
+        "32APSK": 2,
+        "128APSK": 2,
+        "AM-SSB-WC": 297,
+        "AM-SSB-SC": 22,
+        "AM-DSB-WC": 15,
+        "AM-DSB-SC": 101,
+        "FM": 319,
+        "GMSK": 167,
+        "OQPSK": 22
+      }
+    },
+    "calibration": {
+      "median_confidence_correct": 0.8463587164878845,
+      "median_confidence_wrong": 0.07958973944187164,
+      "max_confidence_wrong": 0.7426644563674927,
+      "wrong_above_0.9": 0,
+      "wrong_above_0.99": 0,
+      "wrong_total": 10890,
+      "calibration_inverted": false
+    },
+    "notes": [
+      "model chooses among 24 classes"
+    ]
+  },
+  "eval_linear_probe_full24": {
+    "checkpoint": "models_saved\\modulation_cnn_radioml_linearprobe.pt",
+    "model_sha256": "49e49224cbf686f63b6c9a157d0e69dfc85960c2ad7cdd6cf29a1fa99b2ac56d",
+    "labels": [
+      "OOK",
+      "4ASK",
+      "8ASK",
+      "BPSK",
+      "QPSK",
+      "8PSK",
+      "16PSK",
+      "32PSK",
+      "16APSK",
+      "32APSK",
+      "64APSK",
+      "128APSK",
+      "16QAM",
+      "32QAM",
+      "64QAM",
+      "128QAM",
+      "256QAM",
+      "AM-SSB-WC",
+      "AM-SSB-SC",
+      "AM-DSB-WC",
+      "AM-DSB-SC",
+      "FM",
+      "GMSK",
+      "OQPSK"
+    ],
+    "frames": 14976,
+    "overall_accuracy": 0.33166399572649574,
+    "per_class": {
+      "128APSK": {
+        "n": 624,
+        "accuracy": 0.07852564102564102,
+        "most_common_predictions": [
+          [
+            "32APSK",
+            125
+          ],
+          [
+            "FM",
+            63
+          ],
+          [
+            "OQPSK",
+            58
+          ],
+          [
+            "16APSK",
+            54
+          ]
+        ]
+      },
+      "128QAM": {
+        "n": 624,
+        "accuracy": 0.0,
+        "most_common_predictions": [
+          [
+            "32APSK",
+            95
+          ],
+          [
+            "16APSK",
+            88
+          ],
+          [
+            "AM-SSB-WC",
+            70
+          ],
+          [
+            "OQPSK",
+            57
+          ]
+        ]
+      },
+      "16APSK": {
+        "n": 624,
+        "accuracy": 0.23717948717948717,
+        "most_common_predictions": [
+          [
+            "16APSK",
+            148
+          ],
+          [
+            "OQPSK",
+            77
+          ],
+          [
+            "32PSK",
+            76
+          ],
+          [
+            "FM",
+            67
+          ]
+        ]
+      },
+      "16PSK": {
+        "n": 624,
+        "accuracy": 0.00641025641025641,
+        "most_common_predictions": [
+          [
+            "32PSK",
+            228
+          ],
+          [
+            "8PSK",
+            79
+          ],
+          [
+            "FM",
+            67
+          ],
+          [
+            "QPSK",
+            60
+          ]
+        ]
+      },
+      "16QAM": {
+        "n": 624,
+        "accuracy": 0.11217948717948718,
+        "most_common_predictions": [
+          [
+            "32APSK",
+            72
+          ],
+          [
+            "16QAM",
+            70
+          ],
+          [
+            "16APSK",
+            68
+          ],
+          [
+            "OQPSK",
+            67
+          ]
+        ]
+      },
+      "256QAM": {
+        "n": 624,
+        "accuracy": 0.041666666666666664,
+        "most_common_predictions": [
+          [
+            "32APSK",
+            106
+          ],
+          [
+            "FM",
+            64
+          ],
+          [
+            "16QAM",
+            64
+          ],
+          [
+            "16APSK",
+            59
+          ]
+        ]
+      },
+      "32APSK": {
+        "n": 624,
+        "accuracy": 0.40224358974358976,
+        "most_common_predictions": [
+          [
+            "32APSK",
+            251
+          ],
+          [
+            "FM",
+            62
+          ],
+          [
+            "AM-SSB-WC",
+            60
+          ],
+          [
+            "OQPSK",
+            52
+          ]
+        ]
+      },
+      "32PSK": {
+        "n": 624,
+        "accuracy": 0.36217948717948717,
+        "most_common_predictions": [
+          [
+            "32PSK",
+            226
+          ],
+          [
+            "8PSK",
+            83
+          ],
+          [
+            "QPSK",
+            64
+          ],
+          [
+            "AM-SSB-WC",
+            62
+          ]
+        ]
+      },
+      "32QAM": {
+        "n": 624,
+        "accuracy": 0.046474358974358976,
+        "most_common_predictions": [
+          [
+            "16APSK",
+            88
+          ],
+          [
+            "OQPSK",
+            73
+          ],
+          [
+            "32APSK",
+            73
+          ],
+          [
+            "FM",
+            60
+          ]
+        ]
+      },
+      "4ASK": {
+        "n": 624,
+        "accuracy": 0.3141025641025641,
+        "most_common_predictions": [
+          [
+            "8ASK",
+            205
+          ],
+          [
+            "4ASK",
+            196
+          ],
+          [
+            "FM",
+            61
+          ],
+          [
+            "AM-SSB-WC",
+            54
+          ]
+        ]
+      },
+      "64APSK": {
+        "n": 624,
+        "accuracy": 0.0,
+        "most_common_predictions": [
+          [
+            "32APSK",
+            102
+          ],
+          [
+            "16APSK",
+            86
+          ],
+          [
+            "OQPSK",
+            62
+          ],
+          [
+            "AM-SSB-WC",
+            57
+          ]
+        ]
+      },
+      "64QAM": {
+        "n": 624,
+        "accuracy": 0.0,
+        "most_common_predictions": [
+          [
+            "32APSK",
+            82
+          ],
+          [
+            "16APSK",
+            67
+          ],
+          [
+            "OQPSK",
+            62
+          ],
+          [
+            "16QAM",
+            60
+          ]
+        ]
+      },
+      "8ASK": {
+        "n": 624,
+        "accuracy": 0.5849358974358975,
+        "most_common_predictions": [
+          [
+            "8ASK",
+            365
+          ],
+          [
+            "AM-SSB-WC",
+            61
+          ],
+          [
+            "4ASK",
+            48
+          ],
+          [
+            "FM",
+            42
+          ]
+        ]
+      },
+      "8PSK": {
+        "n": 624,
+        "accuracy": 0.12980769230769232,
+        "most_common_predictions": [
+          [
+            "32PSK",
+            205
+          ],
+          [
+            "QPSK",
+            89
+          ],
+          [
+            "8PSK",
+            81
+          ],
+          [
+            "AM-SSB-WC",
+            56
+          ]
+        ]
+      },
+      "AM-DSB-SC": {
+        "n": 624,
+        "accuracy": 0.266025641025641,
+        "most_common_predictions": [
+          [
+            "AM-DSB-WC",
+            289
+          ],
+          [
+            "AM-DSB-SC",
+            166
+          ],
+          [
+            "FM",
+            62
+          ],
+          [
+            "AM-SSB-WC",
+            39
+          ]
+        ]
+      },
+      "AM-DSB-WC": {
+        "n": 624,
+        "accuracy": 0.5096153846153846,
+        "most_common_predictions": [
+          [
+            "AM-DSB-WC",
+            318
+          ],
+          [
+            "AM-DSB-SC",
+            131
+          ],
+          [
+            "FM",
+            48
+          ],
+          [
+            "AM-SSB-WC",
+            45
+          ]
+        ]
+      },
+      "AM-SSB-SC": {
+        "n": 624,
+        "accuracy": 0.19391025641025642,
+        "most_common_predictions": [
+          [
+            "AM-SSB-WC",
+            375
+          ],
+          [
+            "AM-SSB-SC",
+            121
+          ],
+          [
+            "FM",
+            48
+          ],
+          [
+            "GMSK",
+            22
+          ]
+        ]
+      },
+      "AM-SSB-WC": {
+        "n": 624,
+        "accuracy": 0.6810897435897436,
+        "most_common_predictions": [
+          [
+            "AM-SSB-WC",
+            425
+          ],
+          [
+            "AM-SSB-SC",
+            72
+          ],
+          [
+            "FM",
+            40
+          ],
+          [
+            "OOK",
+            21
+          ]
+        ]
+      },
+      "BPSK": {
+        "n": 624,
+        "accuracy": 0.6458333333333334,
+        "most_common_predictions": [
+          [
+            "BPSK",
+            403
+          ],
+          [
+            "AM-SSB-WC",
+            61
+          ],
+          [
+            "FM",
+            48
+          ],
+          [
+            "AM-DSB-SC",
+            37
+          ]
+        ]
+      },
+      "FM": {
+        "n": 624,
+        "accuracy": 0.8205128205128205,
+        "most_common_predictions": [
+          [
+            "FM",
+            512
+          ],
+          [
+            "AM-SSB-WC",
+            34
+          ],
+          [
+            "OOK",
+            22
+          ],
+          [
+            "AM-DSB-SC",
+            17
+          ]
+        ]
+      },
+      "GMSK": {
+        "n": 624,
+        "accuracy": 0.6602564102564102,
+        "most_common_predictions": [
+          [
+            "GMSK",
+            412
+          ],
+          [
+            "FM",
+            71
+          ],
+          [
+            "AM-SSB-WC",
+            66
+          ],
+          [
+            "AM-DSB-SC",
+            27
+          ]
+        ]
+      },
+      "OOK": {
+        "n": 624,
+        "accuracy": 0.655448717948718,
+        "most_common_predictions": [
+          [
+            "OOK",
+            409
+          ],
+          [
+            "AM-SSB-WC",
+            55
+          ],
+          [
+            "FM",
+            51
+          ],
+          [
+            "8ASK",
+            34
+          ]
+        ]
+      },
+      "OQPSK": {
+        "n": 624,
+        "accuracy": 0.6041666666666666,
+        "most_common_predictions": [
+          [
+            "OQPSK",
+            377
+          ],
+          [
+            "FM",
+            62
+          ],
+          [
+            "AM-SSB-WC",
+            52
+          ],
+          [
+            "AM-DSB-SC",
+            25
+          ]
+        ]
+      },
+      "QPSK": {
+        "n": 624,
+        "accuracy": 0.6073717948717948,
+        "most_common_predictions": [
+          [
+            "QPSK",
+            379
+          ],
+          [
+            "FM",
+            61
+          ],
+          [
+            "GMSK",
+            43
+          ],
+          [
+            "AM-SSB-WC",
+            40
+          ]
+        ]
+      }
+    },
+    "per_snr": {
+      "-20": {
+        "n": 576,
+        "accuracy": 0.046875
+      },
+      "-18": {
+        "n": 576,
+        "accuracy": 0.04513888888888889
+      },
+      "-16": {
+        "n": 576,
+        "accuracy": 0.046875
+      },
+      "-14": {
+        "n": 576,
+        "accuracy": 0.050347222222222224
+      },
+      "-12": {
+        "n": 576,
+        "accuracy": 0.05381944444444445
+      },
+      "-10": {
+        "n": 576,
+        "accuracy": 0.041666666666666664
+      },
+      "-8": {
+        "n": 576,
+        "accuracy": 0.059027777777777776
+      },
+      "-6": {
+        "n": 576,
+        "accuracy": 0.0954861111111111
+      },
+      "-4": {
+        "n": 576,
+        "accuracy": 0.11979166666666667
+      },
+      "-2": {
+        "n": 576,
+        "accuracy": 0.23958333333333334
+      },
+      "0": {
+        "n": 576,
+        "accuracy": 0.34375
+      },
+      "2": {
+        "n": 576,
+        "accuracy": 0.4201388888888889
+      },
+      "4": {
+        "n": 576,
+        "accuracy": 0.4253472222222222
+      },
+      "6": {
+        "n": 576,
+        "accuracy": 0.4826388888888889
+      },
+      "8": {
+        "n": 576,
+        "accuracy": 0.4670138888888889
+      },
+      "10": {
+        "n": 576,
+        "accuracy": 0.5017361111111112
+      },
+      "12": {
+        "n": 576,
+        "accuracy": 0.5173611111111112
+      },
+      "14": {
+        "n": 576,
+        "accuracy": 0.5138888888888888
+      },
+      "16": {
+        "n": 576,
+        "accuracy": 0.515625
+      },
+      "18": {
+        "n": 576,
+        "accuracy": 0.5086805555555556
+      },
+      "20": {
+        "n": 576,
+        "accuracy": 0.53125
+      },
+      "22": {
+        "n": 576,
+        "accuracy": 0.5208333333333334
+      },
+      "24": {
+        "n": 576,
+        "accuracy": 0.5034722222222222
+      },
+      "26": {
+        "n": 576,
+        "accuracy": 0.5104166666666666
+      },
+      "28": {
+        "n": 576,
+        "accuracy": 0.515625
+      },
+      "30": {
+        "n": 576,
+        "accuracy": 0.546875
+      }
+    },
+    "confusion": {
+      "128APSK": {
+        "OOK": 23,
+        "4ASK": 4,
+        "8ASK": 7,
+        "BPSK": 12,
+        "QPSK": 15,
+        "32PSK": 11,
+        "16APSK": 54,
+        "32APSK": 125,
+        "128APSK": 49,
+        "16QAM": 36,
+        "32QAM": 35,
+        "256QAM": 19,
+        "AM-SSB-WC": 47,
+        "AM-SSB-SC": 3,
+        "AM-DSB-WC": 1,
+        "AM-DSB-SC": 26,
+        "FM": 63,
+        "GMSK": 36,
+        "OQPSK": 58
+      },
+      "128QAM": {
+        "OOK": 23,
+        "4ASK": 13,
+        "8ASK": 4,
+        "BPSK": 11,
+        "QPSK": 16,
+        "8PSK": 4,
+        "16PSK": 2,
+        "32PSK": 16,
+        "16APSK": 88,
+        "32APSK": 95,
+        "128APSK": 26,
+        "16QAM": 38,
+        "32QAM": 40,
+        "256QAM": 14,
+        "AM-SSB-WC": 70,
+        "AM-SSB-SC": 7,
+        "AM-DSB-WC": 3,
+        "AM-DSB-SC": 20,
+        "FM": 50,
+        "GMSK": 27,
+        "OQPSK": 57
+      },
+      "16APSK": {
+        "OOK": 23,
+        "4ASK": 9,
+        "8ASK": 4,
+        "BPSK": 8,
+        "QPSK": 38,
+        "8PSK": 28,
+        "32PSK": 76,
+        "16APSK": 148,
+        "32APSK": 10,
+        "128APSK": 2,
+        "16QAM": 13,
+        "32QAM": 6,
+        "128QAM": 1,
+        "AM-SSB-WC": 56,
+        "AM-SSB-SC": 8,
+        "AM-DSB-WC": 7,
+        "AM-DSB-SC": 24,
+        "FM": 67,
+        "GMSK": 19,
+        "OQPSK": 77
+      },
+      "16PSK": {
+        "OOK": 18,
+        "4ASK": 14,
+        "8ASK": 6,
+        "BPSK": 5,
+        "QPSK": 60,
+        "8PSK": 79,
+        "16PSK": 4,
+        "32PSK": 228,
+        "16APSK": 6,
+        "AM-SSB-WC": 54,
+        "AM-SSB-SC": 4,
+        "AM-DSB-WC": 1,
+        "AM-DSB-SC": 24,
+        "FM": 67,
+        "GMSK": 44,
+        "OQPSK": 10
+      },
+      "16QAM": {
+        "OOK": 26,
+        "4ASK": 9,
+        "8ASK": 2,
+        "BPSK": 7,
+        "QPSK": 34,
+        "8PSK": 6,
+        "32PSK": 27,
+        "16APSK": 68,
+        "32APSK": 72,
+        "128APSK": 13,
+        "16QAM": 70,
+        "32QAM": 25,
+        "128QAM": 1,
+        "256QAM": 13,
+        "AM-SSB-WC": 59,
+        "AM-SSB-SC": 8,
+        "AM-DSB-WC": 1,
+        "AM-DSB-SC": 29,
+        "FM": 58,
+        "GMSK": 29,
+        "OQPSK": 67
+      },
+      "256QAM": {
+        "OOK": 22,
+        "4ASK": 8,
+        "8ASK": 6,
+        "BPSK": 8,
+        "QPSK": 17,
+        "8PSK": 4,
+        "32PSK": 12,
+        "16APSK": 59,
+        "32APSK": 106,
+        "128APSK": 27,
+        "16QAM": 64,
+        "32QAM": 31,
+        "128QAM": 1,
+        "256QAM": 26,
+        "AM-SSB-WC": 51,
+        "AM-SSB-SC": 4,
+        "AM-DSB-WC": 5,
+        "AM-DSB-SC": 27,
+        "FM": 64,
+        "GMSK": 30,
+        "OQPSK": 52
+      },
+      "32APSK": {
+        "OOK": 21,
+        "4ASK": 6,
+        "8ASK": 6,
+        "BPSK": 12,
+        "QPSK": 14,
+        "32PSK": 7,
+        "16APSK": 24,
+        "32APSK": 251,
+        "128APSK": 16,
+        "16QAM": 13,
+        "32QAM": 20,
+        "256QAM": 7,
+        "AM-SSB-WC": 60,
+        "AM-SSB-SC": 4,
+        "AM-DSB-WC": 2,
+        "AM-DSB-SC": 16,
+        "FM": 62,
+        "GMSK": 31,
+        "OQPSK": 52
+      },
+      "32PSK": {
+        "OOK": 18,
+        "4ASK": 11,
+        "8ASK": 5,
+        "BPSK": 5,
+        "QPSK": 64,
+        "8PSK": 83,
+        "16PSK": 7,
+        "32PSK": 226,
+        "16APSK": 3,
+        "AM-SSB-WC": 62,
+        "AM-SSB-SC": 8,
+        "AM-DSB-WC": 1,
+        "AM-DSB-SC": 21,
+        "FM": 59,
+        "GMSK": 41,
+        "OQPSK": 10
+      },
+      "32QAM": {
+        "OOK": 30,
+        "4ASK": 10,
+        "8ASK": 5,
+        "BPSK": 9,
+        "QPSK": 26,
+        "8PSK": 4,
+        "32PSK": 33,
+        "16APSK": 88,
+        "32APSK": 73,
+        "64APSK": 1,
+        "128APSK": 25,
+        "16QAM": 40,
+        "32QAM": 29,
+        "256QAM": 11,
+        "AM-SSB-WC": 46,
+        "AM-SSB-SC": 2,
+        "AM-DSB-WC": 3,
+        "AM-DSB-SC": 26,
+        "FM": 60,
+        "GMSK": 30,
+        "OQPSK": 73
+      },
+      "4ASK": {
+        "OOK": 46,
+        "4ASK": 196,
+        "8ASK": 205,
+        "BPSK": 10,
+        "QPSK": 1,
+        "16APSK": 1,
+        "128APSK": 1,
+        "AM-SSB-WC": 54,
+        "AM-SSB-SC": 16,
+        "AM-DSB-SC": 15,
+        "FM": 61,
+        "GMSK": 18
+      },
+      "64APSK": {
+        "OOK": 33,
+        "4ASK": 13,
+        "8ASK": 3,
+        "BPSK": 11,
+        "QPSK": 26,
+        "8PSK": 3,
+        "16PSK": 1,
+        "32PSK": 10,
+        "16APSK": 86,
+        "32APSK": 102,
+        "128APSK": 27,
+        "16QAM": 36,
+        "32QAM": 36,
+        "256QAM": 16,
+        "AM-SSB-WC": 57,
+        "AM-SSB-SC": 5,
+        "AM-DSB-WC": 2,
+        "AM-DSB-SC": 16,
+        "FM": 56,
+        "GMSK": 23,
+        "OQPSK": 62
+      },
+      "64QAM": {
+        "OOK": 20,
+        "4ASK": 14,
+        "8ASK": 4,
+        "BPSK": 17,
+        "QPSK": 24,
+        "8PSK": 6,
+        "32PSK": 10,
+        "16APSK": 67,
+        "32APSK": 82,
+        "128APSK": 30,
+        "16QAM": 60,
+        "32QAM": 30,
+        "256QAM": 28,
+        "AM-SSB-WC": 56,
+        "AM-SSB-SC": 4,
+        "AM-DSB-WC": 5,
+        "AM-DSB-SC": 22,
+        "FM": 58,
+        "GMSK": 25,
+        "OQPSK": 62
+      },
+      "8ASK": {
+        "OOK": 23,
+        "4ASK": 48,
+        "8ASK": 365,
+        "BPSK": 14,
+        "QPSK": 1,
+        "16APSK": 3,
+        "32APSK": 1,
+        "AM-SSB-WC": 61,
+        "AM-SSB-SC": 29,
+        "AM-DSB-WC": 2,
+        "AM-DSB-SC": 18,
+        "FM": 42,
+        "GMSK": 17
+      },
+      "8PSK": {
+        "OOK": 34,
+        "4ASK": 10,
+        "8ASK": 1,
+        "BPSK": 9,
+        "QPSK": 89,
+        "8PSK": 81,
+        "16PSK": 4,
+        "32PSK": 205,
+        "16APSK": 2,
+        "32APSK": 1,
+        "128APSK": 1,
+        "32QAM": 2,
+        "AM-SSB-WC": 56,
+        "AM-SSB-SC": 8,
+        "AM-DSB-WC": 3,
+        "AM-DSB-SC": 22,
+        "FM": 49,
+        "GMSK": 37,
+        "OQPSK": 10
+      },
+      "AM-DSB-SC": {
+        "OOK": 13,
+        "4ASK": 8,
+        "8ASK": 2,
+        "BPSK": 16,
+        "QPSK": 3,
+        "16PSK": 1,
+        "16APSK": 1,
+        "AM-SSB-WC": 39,
+        "AM-SSB-SC": 1,
+        "AM-DSB-WC": 289,
+        "AM-DSB-SC": 166,
+        "FM": 62,
+        "GMSK": 22,
+        "OQPSK": 1
+      },
+      "AM-DSB-WC": {
+        "OOK": 26,
+        "4ASK": 10,
+        "8ASK": 1,
+        "BPSK": 22,
+        "QPSK": 1,
+        "16APSK": 1,
+        "AM-SSB-WC": 45,
+        "AM-SSB-SC": 1,
+        "AM-DSB-WC": 318,
+        "AM-DSB-SC": 131,
+        "FM": 48,
+        "GMSK": 20
+      },
+      "AM-SSB-SC": {
+        "OOK": 18,
+        "4ASK": 9,
+        "8ASK": 5,
+        "BPSK": 3,
+        "QPSK": 4,
+        "16APSK": 1,
+        "AM-SSB-WC": 375,
+        "AM-SSB-SC": 121,
+        "AM-DSB-SC": 18,
+        "FM": 48,
+        "GMSK": 22
+      },
+      "AM-SSB-WC": {
+        "OOK": 21,
+        "4ASK": 13,
+        "8ASK": 5,
+        "BPSK": 6,
+        "QPSK": 2,
+        "32PSK": 1,
+        "16APSK": 1,
+        "128APSK": 2,
+        "AM-SSB-WC": 425,
+        "AM-SSB-SC": 72,
+        "AM-DSB-SC": 15,
+        "FM": 40,
+        "GMSK": 20,
+        "OQPSK": 1
+      },
+      "BPSK": {
+        "OOK": 20,
+        "4ASK": 10,
+        "8ASK": 5,
+        "BPSK": 403,
+        "QPSK": 4,
+        "16APSK": 3,
+        "32QAM": 1,
+        "AM-SSB-WC": 61,
+        "AM-SSB-SC": 4,
+        "AM-DSB-WC": 6,
+        "AM-DSB-SC": 37,
+        "FM": 48,
+        "GMSK": 21,
+        "OQPSK": 1
+      },
+      "FM": {
+        "OOK": 22,
+        "4ASK": 11,
+        "BPSK": 5,
+        "QPSK": 4,
+        "AM-SSB-WC": 34,
+        "AM-SSB-SC": 2,
+        "AM-DSB-WC": 1,
+        "AM-DSB-SC": 17,
+        "FM": 512,
+        "GMSK": 15,
+        "OQPSK": 1
+      },
+      "GMSK": {
+        "OOK": 15,
+        "4ASK": 9,
+        "8ASK": 2,
+        "BPSK": 7,
+        "QPSK": 8,
+        "16APSK": 2,
+        "128QAM": 1,
+        "AM-SSB-WC": 66,
+        "AM-SSB-SC": 3,
+        "AM-DSB-SC": 27,
+        "FM": 71,
+        "GMSK": 412,
+        "OQPSK": 1
+      },
+      "OOK": {
+        "OOK": 409,
+        "4ASK": 9,
+        "8ASK": 34,
+        "BPSK": 10,
+        "QPSK": 4,
+        "16APSK": 1,
+        "AM-SSB-WC": 55,
+        "AM-SSB-SC": 16,
+        "AM-DSB-SC": 14,
+        "FM": 51,
+        "GMSK": 21
+      },
+      "OQPSK": {
+        "OOK": 15,
+        "4ASK": 14,
+        "8ASK": 5,
+        "BPSK": 15,
+        "QPSK": 16,
+        "32PSK": 3,
+        "16APSK": 1,
+        "128APSK": 1,
+        "AM-SSB-WC": 52,
+        "AM-SSB-SC": 8,
+        "AM-DSB-WC": 5,
+        "AM-DSB-SC": 25,
+        "FM": 62,
+        "GMSK": 25,
+        "OQPSK": 377
+      },
+      "QPSK": {
+        "OOK": 22,
+        "4ASK": 12,
+        "8ASK": 7,
+        "BPSK": 11,
+        "QPSK": 379,
+        "16PSK": 2,
+        "32PSK": 4,
+        "16APSK": 4,
+        "128APSK": 1,
+        "AM-SSB-WC": 40,
+        "AM-SSB-SC": 4,
+        "AM-DSB-WC": 1,
+        "AM-DSB-SC": 24,
+        "FM": 61,
+        "GMSK": 43,
+        "OQPSK": 9
+      }
+    },
+    "calibration": {
+      "median_confidence_correct": 0.5457466244697571,
+      "median_confidence_wrong": 0.08606457710266113,
+      "max_confidence_wrong": 0.6562828421592712,
+      "wrong_above_0.9": 0,
+      "wrong_above_0.99": 0,
+      "wrong_total": 10009,
+      "calibration_inverted": false
+    },
+    "notes": [
+      "model chooses among 24 classes"
+    ]
+  },
+  "eval_finetune_mappable": {
+    "checkpoint": "models_saved\\modulation_cnn_radioml_finetune.pt",
+    "model_sha256": "cecbd88c7a0592753540776101a86836048853a43da597575ec96ea3ef397d3c",
+    "labels": [
+      "OOK",
+      "4ASK",
+      "8ASK",
+      "BPSK",
+      "QPSK",
+      "8PSK",
+      "16PSK",
+      "32PSK",
+      "16APSK",
+      "32APSK",
+      "64APSK",
+      "128APSK",
+      "16QAM",
+      "32QAM",
+      "64QAM",
+      "128QAM",
+      "256QAM",
+      "AM-SSB-WC",
+      "AM-SSB-SC",
+      "AM-DSB-WC",
+      "AM-DSB-SC",
+      "FM",
+      "GMSK",
+      "OQPSK"
+    ],
+    "frames": 15600,
+    "overall_accuracy": 0.444551282051282,
+    "per_class": {
+      "16QAM": {
+        "n": 3120,
+        "accuracy": 0.4496794871794872,
+        "most_common_predictions": [
+          [
+            "16QAM",
+            1403
+          ],
+          [
+            "FM",
+            374
+          ],
+          [
+            "GMSK",
+            328
+          ],
+          [
+            "16APSK",
+            289
+          ]
+        ]
+      },
+      "64QAM": {
+        "n": 3120,
+        "accuracy": 0.0038461538461538464,
+        "most_common_predictions": [
+          [
+            "256QAM",
+            612
+          ],
+          [
+            "16QAM",
+            403
+          ],
+          [
+            "FM",
+            385
+          ],
+          [
+            "GMSK",
+            328
+          ]
+        ]
+      },
+      "8PSK": {
+        "n": 3120,
+        "accuracy": 0.49455128205128207,
+        "most_common_predictions": [
+          [
+            "8PSK",
+            1543
+          ],
+          [
+            "GMSK",
+            391
+          ],
+          [
+            "FM",
+            390
+          ],
+          [
+            "32PSK",
+            381
+          ]
+        ]
+      },
+      "BPSK": {
+        "n": 3120,
+        "accuracy": 0.6612179487179487,
+        "most_common_predictions": [
+          [
+            "BPSK",
+            2063
+          ],
+          [
+            "FM",
+            359
+          ],
+          [
+            "GMSK",
+            294
+          ],
+          [
+            "AM-DSB-WC",
+            121
+          ]
+        ]
+      },
+      "QPSK": {
+        "n": 3120,
+        "accuracy": 0.6134615384615385,
+        "most_common_predictions": [
+          [
+            "QPSK",
+            1914
+          ],
+          [
+            "FM",
+            402
+          ],
+          [
+            "GMSK",
+            356
+          ],
+          [
+            "AM-SSB-WC",
+            101
+          ]
+        ]
+      }
+    },
+    "per_snr": {
+      "-20": {
+        "n": 600,
+        "accuracy": 0.0033333333333333335
+      },
+      "-18": {
+        "n": 600,
+        "accuracy": 0.0
+      },
+      "-16": {
+        "n": 600,
+        "accuracy": 0.0
+      },
+      "-14": {
+        "n": 600,
+        "accuracy": 0.0
+      },
+      "-12": {
+        "n": 600,
+        "accuracy": 0.0
+      },
+      "-10": {
+        "n": 600,
+        "accuracy": 0.005
+      },
+      "-8": {
+        "n": 600,
+        "accuracy": 0.005
+      },
+      "-6": {
+        "n": 600,
+        "accuracy": 0.01
+      },
+      "-4": {
+        "n": 600,
+        "accuracy": 0.06333333333333334
+      },
+      "-2": {
+        "n": 600,
+        "accuracy": 0.19666666666666666
+      },
+      "0": {
+        "n": 600,
+        "accuracy": 0.37
+      },
+      "2": {
+        "n": 600,
+        "accuracy": 0.42833333333333334
+      },
+      "4": {
+        "n": 600,
+        "accuracy": 0.5133333333333333
+      },
+      "6": {
+        "n": 600,
+        "accuracy": 0.6666666666666666
+      },
+      "8": {
+        "n": 600,
+        "accuracy": 0.7233333333333334
+      },
+      "10": {
+        "n": 600,
+        "accuracy": 0.76
+      },
+      "12": {
+        "n": 600,
+        "accuracy": 0.765
+      },
+      "14": {
+        "n": 600,
+        "accuracy": 0.78
+      },
+      "16": {
+        "n": 600,
+        "accuracy": 0.7816666666666666
+      },
+      "18": {
+        "n": 600,
+        "accuracy": 0.7816666666666666
+      },
+      "20": {
+        "n": 600,
+        "accuracy": 0.785
+      },
+      "22": {
+        "n": 600,
+        "accuracy": 0.7866666666666666
+      },
+      "24": {
+        "n": 600,
+        "accuracy": 0.7916666666666666
+      },
+      "26": {
+        "n": 600,
+        "accuracy": 0.79
+      },
+      "28": {
+        "n": 600,
+        "accuracy": 0.7716666666666666
+      },
+      "30": {
+        "n": 600,
+        "accuracy": 0.78
+      }
+    },
+    "confusion": {
+      "16QAM": {
+        "OOK": 28,
+        "4ASK": 8,
+        "8ASK": 13,
+        "BPSK": 26,
+        "QPSK": 34,
+        "8PSK": 5,
+        "16PSK": 1,
+        "32PSK": 119,
+        "16APSK": 289,
+        "32APSK": 71,
+        "64APSK": 4,
+        "128APSK": 32,
+        "16QAM": 1403,
+        "32QAM": 35,
+        "64QAM": 2,
+        "128QAM": 8,
+        "256QAM": 39,
+        "AM-SSB-WC": 117,
+        "AM-DSB-WC": 82,
+        "AM-DSB-SC": 65,
+        "FM": 374,
+        "GMSK": 328,
+        "OQPSK": 37
+      },
+      "64QAM": {
+        "OOK": 20,
+        "4ASK": 5,
+        "8ASK": 7,
+        "BPSK": 12,
+        "QPSK": 21,
+        "16PSK": 6,
+        "32PSK": 101,
+        "16APSK": 215,
+        "32APSK": 235,
+        "64APSK": 40,
+        "128APSK": 191,
+        "16QAM": 403,
+        "32QAM": 181,
+        "64QAM": 12,
+        "128QAM": 50,
+        "256QAM": 612,
+        "AM-SSB-WC": 103,
+        "AM-DSB-WC": 71,
+        "AM-DSB-SC": 85,
+        "FM": 385,
+        "GMSK": 328,
+        "OQPSK": 37
+      },
+      "8PSK": {
+        "OOK": 10,
+        "4ASK": 5,
+        "8ASK": 7,
+        "BPSK": 21,
+        "QPSK": 58,
+        "8PSK": 1543,
+        "16PSK": 2,
+        "32PSK": 381,
+        "16APSK": 3,
+        "32APSK": 15,
+        "128APSK": 20,
+        "16QAM": 6,
+        "32QAM": 5,
+        "256QAM": 3,
+        "AM-SSB-WC": 98,
+        "AM-DSB-WC": 85,
+        "AM-DSB-SC": 70,
+        "FM": 390,
+        "GMSK": 391,
+        "OQPSK": 7
+      },
+      "BPSK": {
+        "OOK": 26,
+        "4ASK": 12,
+        "8ASK": 9,
+        "BPSK": 2063,
+        "QPSK": 1,
+        "16PSK": 4,
+        "32PSK": 12,
+        "16APSK": 2,
+        "32APSK": 9,
+        "128APSK": 16,
+        "16QAM": 1,
+        "32QAM": 2,
+        "256QAM": 4,
+        "AM-SSB-WC": 101,
+        "AM-DSB-WC": 121,
+        "AM-DSB-SC": 83,
+        "FM": 359,
+        "GMSK": 294,
+        "OQPSK": 1
+      },
+      "QPSK": {
+        "OOK": 13,
+        "4ASK": 8,
+        "8ASK": 7,
+        "BPSK": 21,
+        "QPSK": 1914,
+        "16PSK": 5,
+        "32PSK": 93,
+        "16APSK": 1,
+        "32APSK": 9,
+        "128APSK": 11,
+        "16QAM": 3,
+        "32QAM": 2,
+        "256QAM": 5,
+        "AM-SSB-WC": 101,
+        "AM-DSB-WC": 82,
+        "AM-DSB-SC": 82,
+        "FM": 402,
+        "GMSK": 356,
+        "OQPSK": 5
+      }
+    },
+    "calibration": {
+      "median_confidence_correct": 0.8670485019683838,
+      "median_confidence_wrong": 0.05813252553343773,
+      "max_confidence_wrong": 0.5875943899154663,
+      "wrong_above_0.9": 0,
+      "wrong_above_0.99": 0,
+      "wrong_total": 8665,
+      "calibration_inverted": false
+    },
+    "notes": [
+      "model chooses among 24 classes"
+    ]
+  },
+  "eval_finetune_full24": {
+    "checkpoint": "models_saved\\modulation_cnn_radioml_finetune.pt",
+    "model_sha256": "cecbd88c7a0592753540776101a86836048853a43da597575ec96ea3ef397d3c",
+    "labels": [
+      "OOK",
+      "4ASK",
+      "8ASK",
+      "BPSK",
+      "QPSK",
+      "8PSK",
+      "16PSK",
+      "32PSK",
+      "16APSK",
+      "32APSK",
+      "64APSK",
+      "128APSK",
+      "16QAM",
+      "32QAM",
+      "64QAM",
+      "128QAM",
+      "256QAM",
+      "AM-SSB-WC",
+      "AM-SSB-SC",
+      "AM-DSB-WC",
+      "AM-DSB-SC",
+      "FM",
+      "GMSK",
+      "OQPSK"
+    ],
+    "frames": 14976,
+    "overall_accuracy": 0.4262152777777778,
+    "per_class": {
+      "128APSK": {
+        "n": 624,
+        "accuracy": 0.21955128205128205,
+        "most_common_predictions": [
+          [
+            "128APSK",
+            137
+          ],
+          [
+            "32APSK",
+            86
+          ],
+          [
+            "FM",
+            75
+          ],
+          [
+            "GMSK",
+            73
+          ]
+        ]
+      },
+      "128QAM": {
+        "n": 624,
+        "accuracy": 0.01282051282051282,
+        "most_common_predictions": [
+          [
+            "256QAM",
+            82
+          ],
+          [
+            "FM",
+            80
+          ],
+          [
+            "GMSK",
+            75
+          ],
+          [
+            "16QAM",
+            69
+          ]
+        ]
+      },
+      "16APSK": {
+        "n": 624,
+        "accuracy": 0.5416666666666666,
+        "most_common_predictions": [
+          [
+            "16APSK",
+            338
+          ],
+          [
+            "FM",
+            84
+          ],
+          [
+            "GMSK",
+            65
+          ],
+          [
+            "32PSK",
+            39
+          ]
+        ]
+      },
+      "16PSK": {
+        "n": 624,
+        "accuracy": 0.0,
+        "most_common_predictions": [
+          [
+            "32PSK",
+            362
+          ],
+          [
+            "GMSK",
+            82
+          ],
+          [
+            "FM",
+            73
+          ],
+          [
+            "AM-SSB-WC",
+            22
+          ]
+        ]
+      },
+      "16QAM": {
+        "n": 624,
+        "accuracy": 0.4567307692307692,
+        "most_common_predictions": [
+          [
+            "16QAM",
+            285
+          ],
+          [
+            "FM",
+            79
+          ],
+          [
+            "GMSK",
+            65
+          ],
+          [
+            "16APSK",
+            55
+          ]
+        ]
+      },
+      "256QAM": {
+        "n": 624,
+        "accuracy": 0.20352564102564102,
+        "most_common_predictions": [
+          [
+            "256QAM",
+            127
+          ],
+          [
+            "FM",
+            89
+          ],
+          [
+            "16QAM",
+            70
+          ],
+          [
+            "GMSK",
+            68
+          ]
+        ]
+      },
+      "32APSK": {
+        "n": 624,
+        "accuracy": 0.5416666666666666,
+        "most_common_predictions": [
+          [
+            "32APSK",
+            338
+          ],
+          [
+            "FM",
+            69
+          ],
+          [
+            "GMSK",
+            69
+          ],
+          [
+            "16APSK",
+            25
+          ]
+        ]
+      },
+      "32PSK": {
+        "n": 624,
+        "accuracy": 0.5641025641025641,
+        "most_common_predictions": [
+          [
+            "32PSK",
+            352
+          ],
+          [
+            "FM",
+            81
+          ],
+          [
+            "GMSK",
+            76
+          ],
+          [
+            "8PSK",
+            36
+          ]
+        ]
+      },
+      "32QAM": {
+        "n": 624,
+        "accuracy": 0.1971153846153846,
+        "most_common_predictions": [
+          [
+            "32QAM",
+            123
+          ],
+          [
+            "32APSK",
+            74
+          ],
+          [
+            "FM",
+            71
+          ],
+          [
+            "GMSK",
+            67
+          ]
+        ]
+      },
+      "4ASK": {
+        "n": 624,
+        "accuracy": 0.5801282051282052,
+        "most_common_predictions": [
+          [
+            "4ASK",
+            362
+          ],
+          [
+            "FM",
+            65
+          ],
+          [
+            "GMSK",
+            49
+          ],
+          [
+            "8ASK",
+            49
+          ]
+        ]
+      },
+      "64APSK": {
+        "n": 624,
+        "accuracy": 0.03365384615384615,
+        "most_common_predictions": [
+          [
+            "128APSK",
+            106
+          ],
+          [
+            "16APSK",
+            67
+          ],
+          [
+            "GMSK",
+            60
+          ],
+          [
+            "FM",
+            59
+          ]
+        ]
+      },
+      "64QAM": {
+        "n": 624,
+        "accuracy": 0.0016025641025641025,
+        "most_common_predictions": [
+          [
+            "256QAM",
+            128
+          ],
+          [
+            "FM",
+            84
+          ],
+          [
+            "16QAM",
+            77
+          ],
+          [
+            "GMSK",
+            69
+          ]
+        ]
+      },
+      "8ASK": {
+        "n": 624,
+        "accuracy": 0.5208333333333334,
+        "most_common_predictions": [
+          [
+            "8ASK",
+            325
+          ],
+          [
+            "4ASK",
+            92
+          ],
+          [
+            "AM-SSB-WC",
+            56
+          ],
+          [
+            "FM",
+            55
+          ]
+        ]
+      },
+      "8PSK": {
+        "n": 624,
+        "accuracy": 0.5,
+        "most_common_predictions": [
+          [
+            "8PSK",
+            312
+          ],
+          [
+            "32PSK",
+            78
+          ],
+          [
+            "FM",
+            74
+          ],
+          [
+            "GMSK",
+            74
+          ]
+        ]
+      },
+      "AM-DSB-SC": {
+        "n": 624,
+        "accuracy": 0.14583333333333334,
+        "most_common_predictions": [
+          [
+            "AM-DSB-WC",
+            383
+          ],
+          [
+            "AM-DSB-SC",
+            91
+          ],
+          [
+            "FM",
+            76
+          ],
+          [
+            "GMSK",
+            42
+          ]
+        ]
+      },
+      "AM-DSB-WC": {
+        "n": 624,
+        "accuracy": 0.6714743589743589,
+        "most_common_predictions": [
+          [
+            "AM-DSB-WC",
+            419
+          ],
+          [
+            "FM",
+            78
+          ],
+          [
+            "GMSK",
+            52
+          ],
+          [
+            "AM-DSB-SC",
+            44
+          ]
+        ]
+      },
+      "AM-SSB-SC": {
+        "n": 624,
+        "accuracy": 0.1201923076923077,
+        "most_common_predictions": [
+          [
+            "AM-SSB-WC",
+            408
+          ],
+          [
+            "AM-SSB-SC",
+            75
+          ],
+          [
+            "FM",
+            52
+          ],
+          [
+            "GMSK",
+            48
+          ]
+        ]
+      },
+      "AM-SSB-WC": {
+        "n": 624,
+        "accuracy": 0.7259615384615384,
+        "most_common_predictions": [
+          [
+            "AM-SSB-WC",
+            453
+          ],
+          [
+            "GMSK",
+            59
+          ],
+          [
+            "FM",
+            51
+          ],
+          [
+            "AM-SSB-SC",
+            28
+          ]
+        ]
+      },
+      "BPSK": {
+        "n": 624,
+        "accuracy": 0.6602564102564102,
+        "most_common_predictions": [
+          [
+            "BPSK",
+            412
+          ],
+          [
+            "FM",
+            73
+          ],
+          [
+            "GMSK",
+            61
+          ],
+          [
+            "AM-SSB-WC",
+            23
+          ]
+        ]
+      },
+      "FM": {
+        "n": 624,
+        "accuracy": 0.8637820512820513,
+        "most_common_predictions": [
+          [
+            "FM",
+            539
+          ],
+          [
+            "GMSK",
+            42
+          ],
+          [
+            "AM-DSB-SC",
+            20
+          ],
+          [
+            "AM-SSB-WC",
+            14
+          ]
+        ]
+      },
+      "GMSK": {
+        "n": 624,
+        "accuracy": 0.7708333333333334,
+        "most_common_predictions": [
+          [
+            "GMSK",
+            481
+          ],
+          [
+            "FM",
+            67
+          ],
+          [
+            "AM-SSB-WC",
+            28
+          ],
+          [
+            "AM-DSB-SC",
+            13
+          ]
+        ]
+      },
+      "OOK": {
+        "n": 624,
+        "accuracy": 0.6714743589743589,
+        "most_common_predictions": [
+          [
+            "OOK",
+            419
+          ],
+          [
+            "FM",
+            60
+          ],
+          [
+            "GMSK",
+            46
+          ],
+          [
+            "AM-SSB-WC",
+            43
+          ]
+        ]
+      },
+      "OQPSK": {
+        "n": 624,
+        "accuracy": 0.6057692307692307,
+        "most_common_predictions": [
+          [
+            "OQPSK",
+            378
+          ],
+          [
+            "FM",
+            79
+          ],
+          [
+            "GMSK",
+            63
+          ],
+          [
+            "AM-DSB-WC",
+            22
+          ]
+        ]
+      },
+      "QPSK": {
+        "n": 624,
+        "accuracy": 0.6201923076923077,
+        "most_common_predictions": [
+          [
+            "QPSK",
+            387
+          ],
+          [
+            "FM",
+            89
+          ],
+          [
+            "GMSK",
+            65
+          ],
+          [
+            "AM-SSB-WC",
+            19
+          ]
+        ]
+      }
+    },
+    "per_snr": {
+      "-20": {
+        "n": 576,
+        "accuracy": 0.043402777777777776
+      },
+      "-18": {
+        "n": 576,
+        "accuracy": 0.041666666666666664
+      },
+      "-16": {
+        "n": 576,
+        "accuracy": 0.04513888888888889
+      },
+      "-14": {
+        "n": 576,
+        "accuracy": 0.050347222222222224
+      },
+      "-12": {
+        "n": 576,
+        "accuracy": 0.05555555555555555
+      },
+      "-10": {
+        "n": 576,
+        "accuracy": 0.059027777777777776
+      },
+      "-8": {
+        "n": 576,
+        "accuracy": 0.0763888888888889
+      },
+      "-6": {
+        "n": 576,
+        "accuracy": 0.13541666666666666
+      },
+      "-4": {
+        "n": 576,
+        "accuracy": 0.1875
+      },
+      "-2": {
+        "n": 576,
+        "accuracy": 0.3003472222222222
+      },
+      "0": {
+        "n": 576,
+        "accuracy": 0.3940972222222222
+      },
+      "2": {
+        "n": 576,
+        "accuracy": 0.5121527777777778
+      },
+      "4": {
+        "n": 576,
+        "accuracy": 0.546875
+      },
+      "6": {
+        "n": 576,
+        "accuracy": 0.6006944444444444
+      },
+      "8": {
+        "n": 576,
+        "accuracy": 0.65625
+      },
+      "10": {
+        "n": 576,
+        "accuracy": 0.6666666666666666
+      },
+      "12": {
+        "n": 576,
+        "accuracy": 0.6440972222222222
+      },
+      "14": {
+        "n": 576,
+        "accuracy": 0.6684027777777778
+      },
+      "16": {
+        "n": 576,
+        "accuracy": 0.6927083333333334
+      },
+      "18": {
+        "n": 576,
+        "accuracy": 0.6666666666666666
+      },
+      "20": {
+        "n": 576,
+        "accuracy": 0.6736111111111112
+      },
+      "22": {
+        "n": 576,
+        "accuracy": 0.6666666666666666
+      },
+      "24": {
+        "n": 576,
+        "accuracy": 0.6684027777777778
+      },
+      "26": {
+        "n": 576,
+        "accuracy": 0.6770833333333334
+      },
+      "28": {
+        "n": 576,
+        "accuracy": 0.6822916666666666
+      },
+      "30": {
+        "n": 576,
+        "accuracy": 0.6701388888888888
+      }
+    },
+    "confusion": {
+      "128APSK": {
+        "OOK": 4,
+        "4ASK": 1,
+        "8ASK": 2,
+        "BPSK": 4,
+        "QPSK": 2,
+        "16PSK": 1,
+        "32PSK": 20,
+        "16APSK": 34,
+        "32APSK": 86,
+        "64APSK": 11,
+        "128APSK": 137,
+        "16QAM": 48,
+        "32QAM": 31,
+        "128QAM": 1,
+        "256QAM": 41,
+        "AM-SSB-WC": 10,
+        "AM-DSB-WC": 17,
+        "AM-DSB-SC": 23,
+        "FM": 75,
+        "GMSK": 73,
+        "OQPSK": 3
+      },
+      "128QAM": {
+        "OOK": 8,
+        "8ASK": 4,
+        "BPSK": 1,
+        "QPSK": 5,
+        "8PSK": 1,
+        "32PSK": 25,
+        "16APSK": 52,
+        "32APSK": 53,
+        "64APSK": 16,
+        "128APSK": 46,
+        "16QAM": 69,
+        "32QAM": 52,
+        "64QAM": 2,
+        "128QAM": 8,
+        "256QAM": 82,
+        "AM-SSB-WC": 17,
+        "AM-DSB-WC": 15,
+        "AM-DSB-SC": 11,
+        "FM": 80,
+        "GMSK": 75,
+        "OQPSK": 2
+      },
+      "16APSK": {
+        "OOK": 1,
+        "8ASK": 1,
+        "BPSK": 3,
+        "QPSK": 12,
+        "8PSK": 1,
+        "16PSK": 1,
+        "32PSK": 39,
+        "16APSK": 338,
+        "32APSK": 5,
+        "64APSK": 2,
+        "128APSK": 3,
+        "32QAM": 3,
+        "256QAM": 2,
+        "AM-SSB-WC": 29,
+        "AM-DSB-WC": 19,
+        "AM-DSB-SC": 9,
+        "FM": 84,
+        "GMSK": 65,
+        "OQPSK": 7
+      },
+      "16PSK": {
+        "OOK": 4,
+        "4ASK": 1,
+        "8ASK": 1,
+        "BPSK": 1,
+        "QPSK": 12,
+        "8PSK": 22,
+        "32PSK": 362,
+        "16APSK": 1,
+        "32APSK": 4,
+        "128APSK": 3,
+        "16QAM": 1,
+        "256QAM": 2,
+        "AM-SSB-WC": 22,
+        "AM-DSB-WC": 14,
+        "AM-DSB-SC": 18,
+        "FM": 73,
+        "GMSK": 82,
+        "OQPSK": 1
+      },
+      "16QAM": {
+        "OOK": 5,
+        "4ASK": 1,
+        "8ASK": 1,
+        "BPSK": 3,
+        "QPSK": 4,
+        "32PSK": 17,
+        "16APSK": 55,
+        "32APSK": 14,
+        "64APSK": 1,
+        "128APSK": 6,
+        "16QAM": 285,
+        "32QAM": 6,
+        "256QAM": 13,
+        "AM-SSB-WC": 26,
+        "AM-DSB-WC": 25,
+        "AM-DSB-SC": 13,
+        "FM": 79,
+        "GMSK": 65,
+        "OQPSK": 5
+      },
+      "256QAM": {
+        "OOK": 2,
+        "4ASK": 4,
+        "BPSK": 4,
+        "QPSK": 4,
+        "32PSK": 22,
+        "16APSK": 37,
+        "32APSK": 49,
+        "64APSK": 7,
+        "128APSK": 38,
+        "16QAM": 70,
+        "32QAM": 33,
+        "64QAM": 3,
+        "128QAM": 17,
+        "256QAM": 127,
+        "AM-SSB-WC": 15,
+        "AM-DSB-WC": 14,
+        "AM-DSB-SC": 18,
+        "FM": 89,
+        "GMSK": 68,
+        "OQPSK": 3
+      },
+      "32APSK": {
+        "OOK": 4,
+        "4ASK": 3,
+        "8ASK": 2,
+        "BPSK": 5,
+        "QPSK": 3,
+        "8PSK": 1,
+        "16PSK": 1,
+        "32PSK": 13,
+        "16APSK": 25,
+        "32APSK": 338,
+        "64APSK": 2,
+        "128APSK": 8,
+        "16QAM": 7,
+        "32QAM": 2,
+        "256QAM": 13,
+        "AM-SSB-WC": 20,
+        "AM-DSB-WC": 19,
+        "AM-DSB-SC": 18,
+        "FM": 69,
+        "GMSK": 69,
+        "OQPSK": 2
+      },
+      "32PSK": {
+        "4ASK": 5,
+        "8ASK": 2,
+        "BPSK": 3,
+        "QPSK": 12,
+        "8PSK": 36,
+        "16PSK": 1,
+        "32PSK": 352,
+        "32APSK": 1,
+        "128APSK": 2,
+        "32QAM": 1,
+        "256QAM": 1,
+        "AM-SSB-WC": 19,
+        "AM-DSB-WC": 15,
+        "AM-DSB-SC": 14,
+        "FM": 81,
+        "GMSK": 76,
+        "OQPSK": 3
+      },
+      "32QAM": {
+        "OOK": 2,
+        "BPSK": 10,
+        "QPSK": 5,
+        "16PSK": 1,
+        "32PSK": 28,
+        "16APSK": 57,
+        "32APSK": 74,
+        "64APSK": 10,
+        "128APSK": 40,
+        "16QAM": 24,
+        "32QAM": 123,
+        "64QAM": 2,
+        "128QAM": 8,
+        "256QAM": 35,
+        "AM-SSB-WC": 22,
+        "AM-DSB-WC": 21,
+        "AM-DSB-SC": 14,
+        "FM": 71,
+        "GMSK": 67,
+        "OQPSK": 10
+      },
+      "4ASK": {
+        "OOK": 29,
+        "4ASK": 362,
+        "8ASK": 49,
+        "BPSK": 2,
+        "32PSK": 3,
+        "32APSK": 3,
+        "128APSK": 5,
+        "32QAM": 2,
+        "256QAM": 1,
+        "AM-SSB-WC": 38,
+        "AM-DSB-WC": 2,
+        "AM-DSB-SC": 14,
+        "FM": 65,
+        "GMSK": 49
+      },
+      "64APSK": {
+        "OOK": 5,
+        "4ASK": 3,
+        "8ASK": 3,
+        "BPSK": 6,
+        "QPSK": 8,
+        "16PSK": 1,
+        "32PSK": 17,
+        "16APSK": 67,
+        "32APSK": 49,
+        "64APSK": 21,
+        "128APSK": 106,
+        "16QAM": 55,
+        "32QAM": 34,
+        "64QAM": 1,
+        "128QAM": 5,
+        "256QAM": 39,
+        "AM-SSB-WC": 31,
+        "AM-DSB-WC": 20,
+        "AM-DSB-SC": 22,
+        "FM": 59,
+        "GMSK": 60,
+        "OQPSK": 12
+      },
+      "64QAM": {
+        "OOK": 6,
+        "4ASK": 2,
+        "8ASK": 2,
+        "BPSK": 4,
+        "QPSK": 3,
+        "8PSK": 1,
+        "32PSK": 20,
+        "16APSK": 43,
+        "32APSK": 33,
+        "64APSK": 14,
+        "128APSK": 32,
+        "16QAM": 77,
+        "32QAM": 41,
+        "64QAM": 1,
+        "128QAM": 10,
+        "256QAM": 128,
+        "AM-SSB-WC": 22,
+        "AM-DSB-WC": 13,
+        "AM-DSB-SC": 10,
+        "FM": 84,
+        "GMSK": 69,
+        "OQPSK": 9
+      },
+      "8ASK": {
+        "OOK": 18,
+        "4ASK": 92,
+        "8ASK": 325,
+        "BPSK": 1,
+        "32PSK": 1,
+        "16APSK": 3,
+        "32APSK": 1,
+        "128APSK": 3,
+        "32QAM": 3,
+        "256QAM": 1,
+        "AM-SSB-WC": 56,
+        "AM-DSB-WC": 4,
+        "AM-DSB-SC": 18,
+        "FM": 55,
+        "GMSK": 43
+      },
+      "8PSK": {
+        "OOK": 4,
+        "8ASK": 2,
+        "BPSK": 6,
+        "QPSK": 9,
+        "8PSK": 312,
+        "32PSK": 78,
+        "16APSK": 1,
+        "32APSK": 3,
+        "128APSK": 2,
+        "16QAM": 1,
+        "32QAM": 2,
+        "256QAM": 2,
+        "AM-SSB-WC": 26,
+        "AM-DSB-WC": 12,
+        "AM-DSB-SC": 13,
+        "FM": 74,
+        "GMSK": 74,
+        "OQPSK": 3
+      },
+      "AM-DSB-SC": {
+        "OOK": 1,
+        "8ASK": 3,
+        "BPSK": 2,
+        "32PSK": 3,
+        "32APSK": 2,
+        "128APSK": 1,
+        "32QAM": 1,
+        "256QAM": 1,
+        "AM-SSB-WC": 18,
+        "AM-DSB-WC": 383,
+        "AM-DSB-SC": 91,
+        "FM": 76,
+        "GMSK": 42
+      },
+      "AM-DSB-WC": {
+        "OOK": 1,
+        "4ASK": 1,
+        "8ASK": 1,
+        "BPSK": 1,
+        "32APSK": 6,
+        "128APSK": 4,
+        "32QAM": 2,
+        "AM-SSB-WC": 15,
+        "AM-DSB-WC": 419,
+        "AM-DSB-SC": 44,
+        "FM": 78,
+        "GMSK": 52
+      },
+      "AM-SSB-SC": {
+        "OOK": 3,
+        "4ASK": 1,
+        "8ASK": 5,
+        "32PSK": 2,
+        "16APSK": 1,
+        "32APSK": 2,
+        "128APSK": 6,
+        "AM-SSB-WC": 408,
+        "AM-SSB-SC": 75,
+        "AM-DSB-WC": 5,
+        "AM-DSB-SC": 16,
+        "FM": 52,
+        "GMSK": 48
+      },
+      "AM-SSB-WC": {
+        "OOK": 1,
+        "4ASK": 3,
+        "8ASK": 8,
+        "16PSK": 2,
+        "32PSK": 3,
+        "32APSK": 3,
+        "32QAM": 2,
+        "AM-SSB-WC": 453,
+        "AM-SSB-SC": 28,
+        "AM-DSB-WC": 2,
+        "AM-DSB-SC": 9,
+        "FM": 51,
+        "GMSK": 59
+      },
+      "BPSK": {
+        "OOK": 4,
+        "4ASK": 4,
+        "8ASK": 1,
+        "BPSK": 412,
+        "16APSK": 1,
+        "32APSK": 3,
+        "128APSK": 3,
+        "AM-SSB-WC": 23,
+        "AM-DSB-WC": 21,
+        "AM-DSB-SC": 18,
+        "FM": 73,
+        "GMSK": 61
+      },
+      "FM": {
+        "OOK": 1,
+        "8ASK": 2,
+        "32PSK": 1,
+        "32APSK": 1,
+        "128APSK": 2,
+        "AM-SSB-WC": 14,
+        "AM-DSB-WC": 2,
+        "AM-DSB-SC": 20,
+        "FM": 539,
+        "GMSK": 42
+      },
+      "GMSK": {
+        "OOK": 1,
+        "4ASK": 2,
+        "8ASK": 6,
+        "BPSK": 3,
+        "32PSK": 5,
+        "16APSK": 1,
+        "32APSK": 4,
+        "128APSK": 3,
+        "256QAM": 2,
+        "AM-SSB-WC": 28,
+        "AM-DSB-WC": 8,
+        "AM-DSB-SC": 13,
+        "FM": 67,
+        "GMSK": 481
+      },
+      "OOK": {
+        "OOK": 419,
+        "4ASK": 13,
+        "8ASK": 11,
+        "BPSK": 3,
+        "16PSK": 2,
+        "32APSK": 3,
+        "128APSK": 7,
+        "32QAM": 1,
+        "256QAM": 1,
+        "AM-SSB-WC": 43,
+        "AM-DSB-WC": 3,
+        "AM-DSB-SC": 12,
+        "FM": 60,
+        "GMSK": 46
+      },
+      "OQPSK": {
+        "OOK": 7,
+        "4ASK": 3,
+        "8ASK": 1,
+        "BPSK": 8,
+        "QPSK": 2,
+        "32PSK": 19,
+        "32APSK": 2,
+        "128APSK": 2,
+        "16QAM": 1,
+        "256QAM": 2,
+        "AM-SSB-WC": 21,
+        "AM-DSB-WC": 22,
+        "AM-DSB-SC": 14,
+        "FM": 79,
+        "GMSK": 63,
+        "OQPSK": 378
+      },
+      "QPSK": {
+        "OOK": 3,
+        "4ASK": 1,
+        "8ASK": 1,
+        "BPSK": 4,
+        "QPSK": 387,
+        "16PSK": 1,
+        "32PSK": 14,
+        "16APSK": 2,
+        "32APSK": 4,
+        "64APSK": 1,
+        "128APSK": 2,
+        "32QAM": 1,
+        "256QAM": 4,
+        "AM-SSB-WC": 19,
+        "AM-DSB-WC": 13,
+        "AM-DSB-SC": 11,
+        "FM": 89,
+        "GMSK": 65,
+        "OQPSK": 2
+      }
+    },
+    "calibration": {
+      "median_confidence_correct": 0.6013343334197998,
+      "median_confidence_wrong": 0.07127749919891357,
+      "max_confidence_wrong": 0.7331500053405762,
+      "wrong_above_0.9": 0,
+      "wrong_above_0.99": 0,
+      "wrong_total": 8593,
+      "calibration_inverted": false
+    },
+    "notes": [
+      "model chooses among 24 classes"
+    ]
+  },
+  "eval_scratch_mappable": {
+    "checkpoint": "models_saved\\modulation_cnn_radioml_scratch.pt",
+    "model_sha256": "09c0d62b856ad18773260bba6fc80a81c1d6fb73da4884183ab73d46d1aa9ce5",
+    "labels": [
+      "OOK",
+      "4ASK",
+      "8ASK",
+      "BPSK",
+      "QPSK",
+      "8PSK",
+      "16PSK",
+      "32PSK",
+      "16APSK",
+      "32APSK",
+      "64APSK",
+      "128APSK",
+      "16QAM",
+      "32QAM",
+      "64QAM",
+      "128QAM",
+      "256QAM",
+      "AM-SSB-WC",
+      "AM-SSB-SC",
+      "AM-DSB-WC",
+      "AM-DSB-SC",
+      "FM",
+      "GMSK",
+      "OQPSK"
+    ],
+    "frames": 15600,
+    "overall_accuracy": 0.38487179487179485,
+    "per_class": {
+      "16QAM": {
+        "n": 3120,
+        "accuracy": 0.41185897435897434,
+        "most_common_predictions": [
+          [
+            "16QAM",
+            1285
+          ],
+          [
+            "16APSK",
+            430
+          ],
+          [
+            "GMSK",
+            310
+          ],
+          [
+            "FM",
+            189
+          ]
+        ]
+      },
+      "64QAM": {
+        "n": 3120,
+        "accuracy": 0.0,
+        "most_common_predictions": [
+          [
+            "256QAM",
+            559
+          ],
+          [
+            "32QAM",
+            340
+          ],
+          [
+            "16QAM",
+            320
+          ],
+          [
+            "32APSK",
+            318
+          ]
+        ]
+      },
+      "8PSK": {
+        "n": 3120,
+        "accuracy": 0.22916666666666666,
+        "most_common_predictions": [
+          [
+            "32PSK",
+            1152
+          ],
+          [
+            "8PSK",
+            715
+          ],
+          [
+            "GMSK",
+            385
+          ],
+          [
+            "AM-DSB-WC",
+            211
+          ]
+        ]
+      },
+      "BPSK": {
+        "n": 3120,
+        "accuracy": 0.6657051282051282,
+        "most_common_predictions": [
+          [
+            "BPSK",
+            2077
+          ],
+          [
+            "GMSK",
+            233
+          ],
+          [
+            "AM-DSB-WC",
+            193
+          ],
+          [
+            "AM-DSB-SC",
+            179
+          ]
+        ]
+      },
+      "QPSK": {
+        "n": 3120,
+        "accuracy": 0.6176282051282052,
+        "most_common_predictions": [
+          [
+            "QPSK",
+            1927
+          ],
+          [
+            "GMSK",
+            371
+          ],
+          [
+            "AM-DSB-WC",
+            204
+          ],
+          [
+            "FM",
+            185
+          ]
+        ]
+      }
+    },
+    "per_snr": {
+      "-20": {
+        "n": 600,
+        "accuracy": 0.005
+      },
+      "-18": {
+        "n": 600,
+        "accuracy": 0.01
+      },
+      "-16": {
+        "n": 600,
+        "accuracy": 0.006666666666666667
+      },
+      "-14": {
+        "n": 600,
+        "accuracy": 0.0033333333333333335
+      },
+      "-12": {
+        "n": 600,
+        "accuracy": 0.0033333333333333335
+      },
+      "-10": {
+        "n": 600,
+        "accuracy": 0.008333333333333333
+      },
+      "-8": {
+        "n": 600,
+        "accuracy": 0.005
+      },
+      "-6": {
+        "n": 600,
+        "accuracy": 0.008333333333333333
+      },
+      "-4": {
+        "n": 600,
+        "accuracy": 0.06666666666666667
+      },
+      "-2": {
+        "n": 600,
+        "accuracy": 0.225
+      },
+      "0": {
+        "n": 600,
+        "accuracy": 0.385
+      },
+      "2": {
+        "n": 600,
+        "accuracy": 0.46166666666666667
+      },
+      "4": {
+        "n": 600,
+        "accuracy": 0.49
+      },
+      "6": {
+        "n": 600,
+        "accuracy": 0.555
+      },
+      "8": {
+        "n": 600,
+        "accuracy": 0.5833333333333334
+      },
+      "10": {
+        "n": 600,
+        "accuracy": 0.6266666666666667
+      },
+      "12": {
+        "n": 600,
+        "accuracy": 0.6283333333333333
+      },
+      "14": {
+        "n": 600,
+        "accuracy": 0.66
+      },
+      "16": {
+        "n": 600,
+        "accuracy": 0.6466666666666666
+      },
+      "18": {
+        "n": 600,
+        "accuracy": 0.6466666666666666
+      },
+      "20": {
+        "n": 600,
+        "accuracy": 0.6516666666666666
+      },
+      "22": {
+        "n": 600,
+        "accuracy": 0.6583333333333333
+      },
+      "24": {
+        "n": 600,
+        "accuracy": 0.6933333333333334
+      },
+      "26": {
+        "n": 600,
+        "accuracy": 0.6833333333333333
+      },
+      "28": {
+        "n": 600,
+        "accuracy": 0.645
+      },
+      "30": {
+        "n": 600,
+        "accuracy": 0.65
+      }
+    },
+    "confusion": {
+      "16QAM": {
+        "OOK": 20,
+        "4ASK": 2,
+        "8ASK": 28,
+        "BPSK": 29,
+        "QPSK": 40,
+        "8PSK": 11,
+        "32PSK": 58,
+        "16APSK": 430,
+        "32APSK": 81,
+        "128APSK": 16,
+        "16QAM": 1285,
+        "32QAM": 75,
+        "128QAM": 9,
+        "256QAM": 27,
+        "AM-SSB-WC": 95,
+        "AM-SSB-SC": 65,
+        "AM-DSB-WC": 169,
+        "AM-DSB-SC": 136,
+        "FM": 189,
+        "GMSK": 310,
+        "OQPSK": 45
+      },
+      "64QAM": {
+        "OOK": 24,
+        "4ASK": 2,
+        "8ASK": 13,
+        "BPSK": 22,
+        "QPSK": 33,
+        "8PSK": 16,
+        "16PSK": 2,
+        "32PSK": 43,
+        "16APSK": 283,
+        "32APSK": 318,
+        "64APSK": 11,
+        "128APSK": 109,
+        "16QAM": 320,
+        "32QAM": 340,
+        "128QAM": 21,
+        "256QAM": 559,
+        "AM-SSB-WC": 76,
+        "AM-SSB-SC": 40,
+        "AM-DSB-WC": 208,
+        "AM-DSB-SC": 140,
+        "FM": 179,
+        "GMSK": 316,
+        "OQPSK": 45
+      },
+      "8PSK": {
+        "OOK": 19,
+        "4ASK": 2,
+        "8ASK": 11,
+        "BPSK": 24,
+        "QPSK": 74,
+        "8PSK": 715,
+        "16PSK": 2,
+        "32PSK": 1152,
+        "16APSK": 27,
+        "32APSK": 8,
+        "128APSK": 9,
+        "16QAM": 2,
+        "32QAM": 22,
+        "64QAM": 1,
+        "128QAM": 2,
+        "256QAM": 1,
+        "AM-SSB-WC": 52,
+        "AM-SSB-SC": 51,
+        "AM-DSB-WC": 211,
+        "AM-DSB-SC": 133,
+        "FM": 202,
+        "GMSK": 385,
+        "OQPSK": 15
+      },
+      "BPSK": {
+        "OOK": 20,
+        "4ASK": 2,
+        "8ASK": 15,
+        "BPSK": 2077,
+        "QPSK": 4,
+        "8PSK": 6,
+        "16PSK": 4,
+        "32PSK": 4,
+        "16APSK": 20,
+        "32APSK": 11,
+        "128APSK": 19,
+        "16QAM": 2,
+        "32QAM": 20,
+        "64QAM": 1,
+        "128QAM": 2,
+        "256QAM": 4,
+        "AM-SSB-WC": 82,
+        "AM-SSB-SC": 52,
+        "AM-DSB-WC": 193,
+        "AM-DSB-SC": 179,
+        "FM": 169,
+        "GMSK": 233,
+        "OQPSK": 1
+      },
+      "QPSK": {
+        "OOK": 16,
+        "4ASK": 2,
+        "8ASK": 12,
+        "BPSK": 35,
+        "QPSK": 1927,
+        "8PSK": 6,
+        "16PSK": 5,
+        "32PSK": 28,
+        "16APSK": 15,
+        "32APSK": 13,
+        "128APSK": 11,
+        "16QAM": 1,
+        "32QAM": 23,
+        "128QAM": 1,
+        "256QAM": 1,
+        "AM-SSB-WC": 72,
+        "AM-SSB-SC": 63,
+        "AM-DSB-WC": 204,
+        "AM-DSB-SC": 120,
+        "FM": 185,
+        "GMSK": 371,
+        "OQPSK": 9
+      }
+    },
+    "calibration": {
+      "median_confidence_correct": 0.9927073121070862,
+      "median_confidence_wrong": 0.06528354436159134,
+      "max_confidence_wrong": 0.6602275371551514,
+      "wrong_above_0.9": 0,
+      "wrong_above_0.99": 0,
+      "wrong_total": 9596,
+      "calibration_inverted": false
+    },
+    "notes": [
+      "model chooses among 24 classes"
+    ]
+  },
+  "eval_scratch_full24": {
+    "checkpoint": "models_saved\\modulation_cnn_radioml_scratch.pt",
+    "model_sha256": "09c0d62b856ad18773260bba6fc80a81c1d6fb73da4884183ab73d46d1aa9ce5",
+    "labels": [
+      "OOK",
+      "4ASK",
+      "8ASK",
+      "BPSK",
+      "QPSK",
+      "8PSK",
+      "16PSK",
+      "32PSK",
+      "16APSK",
+      "32APSK",
+      "64APSK",
+      "128APSK",
+      "16QAM",
+      "32QAM",
+      "64QAM",
+      "128QAM",
+      "256QAM",
+      "AM-SSB-WC",
+      "AM-SSB-SC",
+      "AM-DSB-WC",
+      "AM-DSB-SC",
+      "FM",
+      "GMSK",
+      "OQPSK"
+    ],
+    "frames": 14976,
+    "overall_accuracy": 0.40731837606837606,
+    "per_class": {
+      "128APSK": {
+        "n": 624,
+        "accuracy": 0.1282051282051282,
+        "most_common_predictions": [
+          [
+            "32APSK",
+            98
+          ],
+          [
+            "128APSK",
+            80
+          ],
+          [
+            "256QAM",
+            75
+          ],
+          [
+            "GMSK",
+            67
+          ]
+        ]
+      },
+      "128QAM": {
+        "n": 624,
+        "accuracy": 0.004807692307692308,
+        "most_common_predictions": [
+          [
+            "32QAM",
+            89
+          ],
+          [
+            "256QAM",
+            74
+          ],
+          [
+            "32APSK",
+            72
+          ],
+          [
+            "16APSK",
+            71
+          ]
+        ]
+      },
+      "16APSK": {
+        "n": 624,
+        "accuracy": 0.5496794871794872,
+        "most_common_predictions": [
+          [
+            "16APSK",
+            343
+          ],
+          [
+            "GMSK",
+            67
+          ],
+          [
+            "FM",
+            43
+          ],
+          [
+            "AM-DSB-WC",
+            38
+          ]
+        ]
+      },
+      "16PSK": {
+        "n": 624,
+        "accuracy": 0.0016025641025641025,
+        "most_common_predictions": [
+          [
+            "32PSK",
+            336
+          ],
+          [
+            "GMSK",
+            71
+          ],
+          [
+            "AM-DSB-WC",
+            39
+          ],
+          [
+            "FM",
+            37
+          ]
+        ]
+      },
+      "16QAM": {
+        "n": 624,
+        "accuracy": 0.41185897435897434,
+        "most_common_predictions": [
+          [
+            "16QAM",
+            257
+          ],
+          [
+            "16APSK",
+            91
+          ],
+          [
+            "GMSK",
+            61
+          ],
+          [
+            "FM",
+            40
+          ]
+        ]
+      },
+      "256QAM": {
+        "n": 624,
+        "accuracy": 0.16506410256410256,
+        "most_common_predictions": [
+          [
+            "256QAM",
+            103
+          ],
+          [
+            "32APSK",
+            78
+          ],
+          [
+            "32QAM",
+            77
+          ],
+          [
+            "16APSK",
+            59
+          ]
+        ]
+      },
+      "32APSK": {
+        "n": 624,
+        "accuracy": 0.5480769230769231,
+        "most_common_predictions": [
+          [
+            "32APSK",
+            342
+          ],
+          [
+            "GMSK",
+            64
+          ],
+          [
+            "AM-DSB-WC",
+            37
+          ],
+          [
+            "FM",
+            36
+          ]
+        ]
+      },
+      "32PSK": {
+        "n": 624,
+        "accuracy": 0.5256410256410257,
+        "most_common_predictions": [
+          [
+            "32PSK",
+            328
+          ],
+          [
+            "GMSK",
+            89
+          ],
+          [
+            "AM-DSB-WC",
+            41
+          ],
+          [
+            "8PSK",
+            40
+          ]
+        ]
+      },
+      "32QAM": {
+        "n": 624,
+        "accuracy": 0.20993589743589744,
+        "most_common_predictions": [
+          [
+            "32QAM",
+            131
+          ],
+          [
+            "32APSK",
+            110
+          ],
+          [
+            "GMSK",
+            78
+          ],
+          [
+            "16APSK",
+            76
+          ]
+        ]
+      },
+      "4ASK": {
+        "n": 624,
+        "accuracy": 0.5192307692307693,
+        "most_common_predictions": [
+          [
+            "4ASK",
+            324
+          ],
+          [
+            "8ASK",
+            81
+          ],
+          [
+            "AM-SSB-WC",
+            46
+          ],
+          [
+            "GMSK",
+            32
+          ]
+        ]
+      },
+      "64APSK": {
+        "n": 624,
+        "accuracy": 0.004807692307692308,
+        "most_common_predictions": [
+          [
+            "16APSK",
+            79
+          ],
+          [
+            "32QAM",
+            75
+          ],
+          [
+            "32APSK",
+            75
+          ],
+          [
+            "256QAM",
+            65
+          ]
+        ]
+      },
+      "64QAM": {
+        "n": 624,
+        "accuracy": 0.0,
+        "most_common_predictions": [
+          [
+            "256QAM",
+            115
+          ],
+          [
+            "32QAM",
+            70
+          ],
+          [
+            "16QAM",
+            63
+          ],
+          [
+            "16APSK",
+            61
+          ]
+        ]
+      },
+      "8ASK": {
+        "n": 624,
+        "accuracy": 0.6057692307692307,
+        "most_common_predictions": [
+          [
+            "8ASK",
+            378
+          ],
+          [
+            "AM-SSB-WC",
+            57
+          ],
+          [
+            "4ASK",
+            42
+          ],
+          [
+            "GMSK",
+            39
+          ]
+        ]
+      },
+      "8PSK": {
+        "n": 624,
+        "accuracy": 0.2483974358974359,
+        "most_common_predictions": [
+          [
+            "32PSK",
+            225
+          ],
+          [
+            "8PSK",
+            155
+          ],
+          [
+            "GMSK",
+            71
+          ],
+          [
+            "FM",
+            39
+          ]
+        ]
+      },
+      "AM-DSB-SC": {
+        "n": 624,
+        "accuracy": 0.16987179487179488,
+        "most_common_predictions": [
+          [
+            "AM-DSB-WC",
+            397
+          ],
+          [
+            "AM-DSB-SC",
+            106
+          ],
+          [
+            "FM",
+            48
+          ],
+          [
+            "GMSK",
+            36
+          ]
+        ]
+      },
+      "AM-DSB-WC": {
+        "n": 624,
+        "accuracy": 0.6714743589743589,
+        "most_common_predictions": [
+          [
+            "AM-DSB-WC",
+            419
+          ],
+          [
+            "AM-DSB-SC",
+            84
+          ],
+          [
+            "FM",
+            44
+          ],
+          [
+            "GMSK",
+            41
+          ]
+        ]
+      },
+      "AM-SSB-SC": {
+        "n": 624,
+        "accuracy": 0.20192307692307693,
+        "most_common_predictions": [
+          [
+            "AM-SSB-WC",
+            383
+          ],
+          [
+            "AM-SSB-SC",
+            126
+          ],
+          [
+            "GMSK",
+            33
+          ],
+          [
+            "AM-DSB-WC",
+            30
+          ]
+        ]
+      },
+      "AM-SSB-WC": {
+        "n": 624,
+        "accuracy": 0.6778846153846154,
+        "most_common_predictions": [
+          [
+            "AM-SSB-WC",
+            423
+          ],
+          [
+            "AM-SSB-SC",
+            77
+          ],
+          [
+            "GMSK",
+            36
+          ],
+          [
+            "AM-DSB-WC",
+            30
+          ]
+        ]
+      },
+      "BPSK": {
+        "n": 624,
+        "accuracy": 0.6650641025641025,
+        "most_common_predictions": [
+          [
+            "BPSK",
+            415
+          ],
+          [
+            "GMSK",
+            52
+          ],
+          [
+            "AM-DSB-SC",
+            40
+          ],
+          [
+            "FM",
+            34
+          ]
+        ]
+      },
+      "FM": {
+        "n": 624,
+        "accuracy": 0.8141025641025641,
+        "most_common_predictions": [
+          [
+            "FM",
+            508
+          ],
+          [
+            "AM-DSB-WC",
+            44
+          ],
+          [
+            "GMSK",
+            26
+          ],
+          [
+            "AM-DSB-SC",
+            14
+          ]
+        ]
+      },
+      "GMSK": {
+        "n": 624,
+        "accuracy": 0.7548076923076923,
+        "most_common_predictions": [
+          [
+            "GMSK",
+            471
+          ],
+          [
+            "AM-DSB-WC",
+            40
+          ],
+          [
+            "FM",
+            32
+          ],
+          [
+            "AM-SSB-WC",
+            21
+          ]
+        ]
+      },
+      "OOK": {
+        "n": 624,
+        "accuracy": 0.6602564102564102,
+        "most_common_predictions": [
+          [
+            "OOK",
+            412
+          ],
+          [
+            "AM-SSB-WC",
+            38
+          ],
+          [
+            "AM-DSB-WC",
+            34
+          ],
+          [
+            "8ASK",
+            34
+          ]
+        ]
+      },
+      "OQPSK": {
+        "n": 624,
+        "accuracy": 0.6185897435897436,
+        "most_common_predictions": [
+          [
+            "OQPSK",
+            386
+          ],
+          [
+            "GMSK",
+            58
+          ],
+          [
+            "AM-DSB-WC",
+            47
+          ],
+          [
+            "FM",
+            40
+          ]
+        ]
+      },
+      "QPSK": {
+        "n": 624,
+        "accuracy": 0.6185897435897436,
+        "most_common_predictions": [
+          [
+            "QPSK",
+            386
+          ],
+          [
+            "GMSK",
+            80
+          ],
+          [
+            "FM",
+            41
+          ],
+          [
+            "AM-DSB-WC",
+            33
+          ]
+        ]
+      }
+    },
+    "per_snr": {
+      "-20": {
+        "n": 576,
+        "accuracy": 0.027777777777777776
+      },
+      "-18": {
+        "n": 576,
+        "accuracy": 0.036458333333333336
+      },
+      "-16": {
+        "n": 576,
+        "accuracy": 0.043402777777777776
+      },
+      "-14": {
+        "n": 576,
+        "accuracy": 0.03298611111111111
+      },
+      "-12": {
+        "n": 576,
+        "accuracy": 0.052083333333333336
+      },
+      "-10": {
+        "n": 576,
+        "accuracy": 0.06770833333333333
+      },
+      "-8": {
+        "n": 576,
+        "accuracy": 0.08159722222222222
+      },
+      "-6": {
+        "n": 576,
+        "accuracy": 0.1440972222222222
+      },
+      "-4": {
+        "n": 576,
+        "accuracy": 0.1857638888888889
+      },
+      "-2": {
+        "n": 576,
+        "accuracy": 0.3229166666666667
+      },
+      "0": {
+        "n": 576,
+        "accuracy": 0.3854166666666667
+      },
+      "2": {
+        "n": 576,
+        "accuracy": 0.4826388888888889
+      },
+      "4": {
+        "n": 576,
+        "accuracy": 0.5260416666666666
+      },
+      "6": {
+        "n": 576,
+        "accuracy": 0.5815972222222222
+      },
+      "8": {
+        "n": 576,
+        "accuracy": 0.6145833333333334
+      },
+      "10": {
+        "n": 576,
+        "accuracy": 0.6319444444444444
+      },
+      "12": {
+        "n": 576,
+        "accuracy": 0.625
+      },
+      "14": {
+        "n": 576,
+        "accuracy": 0.6267361111111112
+      },
+      "16": {
+        "n": 576,
+        "accuracy": 0.6423611111111112
+      },
+      "18": {
+        "n": 576,
+        "accuracy": 0.6458333333333334
+      },
+      "20": {
+        "n": 576,
+        "accuracy": 0.6319444444444444
+      },
+      "22": {
+        "n": 576,
+        "accuracy": 0.6319444444444444
+      },
+      "24": {
+        "n": 576,
+        "accuracy": 0.6440972222222222
+      },
+      "26": {
+        "n": 576,
+        "accuracy": 0.6458333333333334
+      },
+      "28": {
+        "n": 576,
+        "accuracy": 0.6475694444444444
+      },
+      "30": {
+        "n": 576,
+        "accuracy": 0.6319444444444444
+      }
+    },
+    "confusion": {
+      "128APSK": {
+        "OOK": 3,
+        "8ASK": 1,
+        "BPSK": 6,
+        "QPSK": 4,
+        "8PSK": 5,
+        "16PSK": 1,
+        "32PSK": 14,
+        "16APSK": 43,
+        "32APSK": 98,
+        "64APSK": 1,
+        "128APSK": 80,
+        "16QAM": 29,
+        "32QAM": 65,
+        "64QAM": 1,
+        "256QAM": 75,
+        "AM-SSB-WC": 11,
+        "AM-SSB-SC": 16,
+        "AM-DSB-WC": 30,
+        "AM-DSB-SC": 28,
+        "FM": 38,
+        "GMSK": 67,
+        "OQPSK": 8
+      },
+      "128QAM": {
+        "OOK": 3,
+        "8ASK": 6,
+        "BPSK": 1,
+        "QPSK": 12,
+        "8PSK": 5,
+        "32PSK": 11,
+        "16APSK": 71,
+        "32APSK": 72,
+        "64APSK": 3,
+        "128APSK": 24,
+        "16QAM": 47,
+        "32QAM": 89,
+        "128QAM": 3,
+        "256QAM": 74,
+        "AM-SSB-WC": 17,
+        "AM-SSB-SC": 12,
+        "AM-DSB-WC": 40,
+        "AM-DSB-SC": 26,
+        "FM": 39,
+        "GMSK": 65,
+        "OQPSK": 4
+      },
+      "16APSK": {
+        "OOK": 5,
+        "8ASK": 4,
+        "BPSK": 5,
+        "QPSK": 14,
+        "8PSK": 3,
+        "16PSK": 1,
+        "32PSK": 25,
+        "16APSK": 343,
+        "32APSK": 6,
+        "128APSK": 2,
+        "32QAM": 3,
+        "AM-SSB-WC": 13,
+        "AM-SSB-SC": 7,
+        "AM-DSB-WC": 38,
+        "AM-DSB-SC": 32,
+        "FM": 43,
+        "GMSK": 67,
+        "OQPSK": 13
+      },
+      "16PSK": {
+        "OOK": 3,
+        "4ASK": 1,
+        "8ASK": 4,
+        "BPSK": 2,
+        "QPSK": 19,
+        "8PSK": 36,
+        "16PSK": 1,
+        "32PSK": 336,
+        "16APSK": 1,
+        "32APSK": 9,
+        "128APSK": 1,
+        "32QAM": 5,
+        "256QAM": 1,
+        "AM-SSB-WC": 20,
+        "AM-SSB-SC": 15,
+        "AM-DSB-WC": 39,
+        "AM-DSB-SC": 18,
+        "FM": 37,
+        "GMSK": 71,
+        "OQPSK": 5
+      },
+      "16QAM": {
+        "OOK": 7,
+        "4ASK": 1,
+        "BPSK": 6,
+        "QPSK": 6,
+        "8PSK": 2,
+        "32PSK": 11,
+        "16APSK": 91,
+        "32APSK": 17,
+        "128APSK": 8,
+        "16QAM": 257,
+        "32QAM": 10,
+        "256QAM": 6,
+        "AM-SSB-WC": 22,
+        "AM-SSB-SC": 10,
+        "AM-DSB-WC": 34,
+        "AM-DSB-SC": 28,
+        "FM": 40,
+        "GMSK": 61,
+        "OQPSK": 7
+      },
+      "256QAM": {
+        "OOK": 5,
+        "4ASK": 2,
+        "8ASK": 1,
+        "BPSK": 7,
+        "QPSK": 8,
+        "8PSK": 1,
+        "16PSK": 1,
+        "32PSK": 7,
+        "16APSK": 59,
+        "32APSK": 78,
+        "64APSK": 1,
+        "128APSK": 18,
+        "16QAM": 53,
+        "32QAM": 77,
+        "128QAM": 5,
+        "256QAM": 103,
+        "AM-SSB-WC": 10,
+        "AM-SSB-SC": 9,
+        "AM-DSB-WC": 49,
+        "AM-DSB-SC": 34,
+        "FM": 36,
+        "GMSK": 56,
+        "OQPSK": 4
+      },
+      "32APSK": {
+        "OOK": 3,
+        "8ASK": 4,
+        "BPSK": 5,
+        "QPSK": 8,
+        "8PSK": 2,
+        "32PSK": 6,
+        "16APSK": 31,
+        "32APSK": 342,
+        "128APSK": 9,
+        "16QAM": 3,
+        "32QAM": 10,
+        "256QAM": 2,
+        "AM-SSB-WC": 8,
+        "AM-SSB-SC": 13,
+        "AM-DSB-WC": 37,
+        "AM-DSB-SC": 30,
+        "FM": 36,
+        "GMSK": 64,
+        "OQPSK": 11
+      },
+      "32PSK": {
+        "OOK": 1,
+        "8ASK": 4,
+        "BPSK": 4,
+        "QPSK": 17,
+        "8PSK": 40,
+        "32PSK": 328,
+        "16APSK": 2,
+        "32APSK": 2,
+        "32QAM": 5,
+        "64QAM": 1,
+        "256QAM": 1,
+        "AM-SSB-WC": 19,
+        "AM-SSB-SC": 15,
+        "AM-DSB-WC": 41,
+        "AM-DSB-SC": 21,
+        "FM": 30,
+        "GMSK": 89,
+        "OQPSK": 4
+      },
+      "32QAM": {
+        "OOK": 8,
+        "8ASK": 3,
+        "BPSK": 6,
+        "QPSK": 7,
+        "8PSK": 3,
+        "32PSK": 10,
+        "16APSK": 76,
+        "32APSK": 110,
+        "128APSK": 17,
+        "16QAM": 16,
+        "32QAM": 131,
+        "128QAM": 4,
+        "256QAM": 28,
+        "AM-SSB-WC": 14,
+        "AM-SSB-SC": 7,
+        "AM-DSB-WC": 27,
+        "AM-DSB-SC": 26,
+        "FM": 42,
+        "GMSK": 78,
+        "OQPSK": 11
+      },
+      "4ASK": {
+        "OOK": 32,
+        "4ASK": 324,
+        "8ASK": 81,
+        "BPSK": 1,
+        "QPSK": 2,
+        "8PSK": 2,
+        "16APSK": 2,
+        "32APSK": 4,
+        "128APSK": 1,
+        "32QAM": 3,
+        "128QAM": 1,
+        "256QAM": 1,
+        "AM-SSB-WC": 46,
+        "AM-SSB-SC": 27,
+        "AM-DSB-WC": 29,
+        "AM-DSB-SC": 11,
+        "FM": 25,
+        "GMSK": 32
+      },
+      "64APSK": {
+        "OOK": 9,
+        "8ASK": 4,
+        "BPSK": 5,
+        "QPSK": 8,
+        "8PSK": 5,
+        "32PSK": 6,
+        "16APSK": 79,
+        "32APSK": 75,
+        "64APSK": 3,
+        "128APSK": 42,
+        "16QAM": 45,
+        "32QAM": 75,
+        "128QAM": 4,
+        "256QAM": 65,
+        "AM-SSB-WC": 12,
+        "AM-SSB-SC": 19,
+        "AM-DSB-WC": 45,
+        "AM-DSB-SC": 25,
+        "FM": 29,
+        "GMSK": 56,
+        "OQPSK": 13
+      },
+      "64QAM": {
+        "OOK": 3,
+        "8ASK": 1,
+        "BPSK": 8,
+        "QPSK": 11,
+        "8PSK": 1,
+        "32PSK": 10,
+        "16APSK": 61,
+        "32APSK": 47,
+        "64APSK": 1,
+        "128APSK": 21,
+        "16QAM": 63,
+        "32QAM": 70,
+        "128QAM": 4,
+        "256QAM": 115,
+        "AM-SSB-WC": 15,
+        "AM-SSB-SC": 13,
+        "AM-DSB-WC": 46,
+        "AM-DSB-SC": 29,
+        "FM": 39,
+        "GMSK": 58,
+        "OQPSK": 8
+      },
+      "8ASK": {
+        "OOK": 12,
+        "4ASK": 42,
+        "8ASK": 378,
+        "BPSK": 1,
+        "QPSK": 3,
+        "8PSK": 2,
+        "16APSK": 4,
+        "32APSK": 2,
+        "128APSK": 3,
+        "32QAM": 4,
+        "AM-SSB-WC": 57,
+        "AM-SSB-SC": 23,
+        "AM-DSB-WC": 24,
+        "AM-DSB-SC": 7,
+        "FM": 23,
+        "GMSK": 39
+      },
+      "8PSK": {
+        "OOK": 3,
+        "8ASK": 3,
+        "BPSK": 2,
+        "QPSK": 18,
+        "8PSK": 155,
+        "16PSK": 1,
+        "32PSK": 225,
+        "16APSK": 3,
+        "32APSK": 1,
+        "128APSK": 7,
+        "32QAM": 6,
+        "AM-SSB-WC": 17,
+        "AM-SSB-SC": 12,
+        "AM-DSB-WC": 37,
+        "AM-DSB-SC": 22,
+        "FM": 39,
+        "GMSK": 71,
+        "OQPSK": 2
+      },
+      "AM-DSB-SC": {
+        "8ASK": 1,
+        "QPSK": 1,
+        "8PSK": 1,
+        "16PSK": 1,
+        "16APSK": 8,
+        "32APSK": 3,
+        "128APSK": 1,
+        "32QAM": 3,
+        "AM-SSB-WC": 10,
+        "AM-SSB-SC": 8,
+        "AM-DSB-WC": 397,
+        "AM-DSB-SC": 106,
+        "FM": 48,
+        "GMSK": 36
+      },
+      "AM-DSB-WC": {
+        "OOK": 2,
+        "8ASK": 2,
+        "QPSK": 1,
+        "8PSK": 2,
+        "16PSK": 1,
+        "16APSK": 4,
+        "32APSK": 2,
+        "128APSK": 2,
+        "32QAM": 2,
+        "AM-SSB-WC": 6,
+        "AM-SSB-SC": 12,
+        "AM-DSB-WC": 419,
+        "AM-DSB-SC": 84,
+        "FM": 44,
+        "GMSK": 41
+      },
+      "AM-SSB-SC": {
+        "OOK": 3,
+        "4ASK": 1,
+        "8ASK": 6,
+        "BPSK": 2,
+        "QPSK": 2,
+        "8PSK": 2,
+        "16APSK": 1,
+        "128APSK": 2,
+        "32QAM": 4,
+        "AM-SSB-WC": 383,
+        "AM-SSB-SC": 126,
+        "AM-DSB-WC": 30,
+        "AM-DSB-SC": 10,
+        "FM": 19,
+        "GMSK": 33
+      },
+      "AM-SSB-WC": {
+        "OOK": 3,
+        "8ASK": 5,
+        "BPSK": 1,
+        "8PSK": 1,
+        "16APSK": 5,
+        "128APSK": 2,
+        "32QAM": 2,
+        "AM-SSB-WC": 423,
+        "AM-SSB-SC": 77,
+        "AM-DSB-WC": 30,
+        "AM-DSB-SC": 14,
+        "FM": 25,
+        "GMSK": 36
+      },
+      "BPSK": {
+        "OOK": 5,
+        "8ASK": 1,
+        "BPSK": 415,
+        "8PSK": 1,
+        "16PSK": 1,
+        "32PSK": 1,
+        "16APSK": 3,
+        "32APSK": 4,
+        "128APSK": 4,
+        "32QAM": 4,
+        "128QAM": 1,
+        "AM-SSB-WC": 16,
+        "AM-SSB-SC": 10,
+        "AM-DSB-WC": 32,
+        "AM-DSB-SC": 40,
+        "FM": 34,
+        "GMSK": 52
+      },
+      "FM": {
+        "OOK": 2,
+        "8ASK": 2,
+        "QPSK": 2,
+        "16PSK": 1,
+        "16APSK": 1,
+        "128APSK": 1,
+        "32QAM": 3,
+        "AM-SSB-WC": 12,
+        "AM-SSB-SC": 8,
+        "AM-DSB-WC": 44,
+        "AM-DSB-SC": 14,
+        "FM": 508,
+        "GMSK": 26
+      },
+      "GMSK": {
+        "OOK": 3,
+        "8ASK": 1,
+        "BPSK": 5,
+        "QPSK": 1,
+        "8PSK": 1,
+        "16APSK": 5,
+        "128APSK": 1,
+        "32QAM": 5,
+        "AM-SSB-WC": 21,
+        "AM-SSB-SC": 18,
+        "AM-DSB-WC": 40,
+        "AM-DSB-SC": 20,
+        "FM": 32,
+        "GMSK": 471
+      },
+      "OOK": {
+        "OOK": 412,
+        "4ASK": 2,
+        "8ASK": 34,
+        "BPSK": 4,
+        "8PSK": 5,
+        "16APSK": 3,
+        "32APSK": 2,
+        "32QAM": 5,
+        "256QAM": 1,
+        "AM-SSB-WC": 38,
+        "AM-SSB-SC": 18,
+        "AM-DSB-WC": 34,
+        "AM-DSB-SC": 12,
+        "FM": 29,
+        "GMSK": 25
+      },
+      "OQPSK": {
+        "OOK": 2,
+        "8ASK": 2,
+        "BPSK": 8,
+        "QPSK": 4,
+        "8PSK": 6,
+        "32PSK": 3,
+        "16APSK": 4,
+        "32APSK": 3,
+        "128APSK": 1,
+        "16QAM": 1,
+        "32QAM": 3,
+        "AM-SSB-WC": 11,
+        "AM-SSB-SC": 15,
+        "AM-DSB-WC": 47,
+        "AM-DSB-SC": 30,
+        "FM": 40,
+        "GMSK": 58,
+        "OQPSK": 386
+      },
+      "QPSK": {
+        "OOK": 2,
+        "BPSK": 6,
+        "QPSK": 386,
+        "8PSK": 1,
+        "16PSK": 1,
+        "32PSK": 6,
+        "16APSK": 3,
+        "32APSK": 2,
+        "128APSK": 2,
+        "32QAM": 4,
+        "AM-SSB-WC": 18,
+        "AM-SSB-SC": 13,
+        "AM-DSB-WC": 33,
+        "AM-DSB-SC": 24,
+        "FM": 41,
+        "GMSK": 80,
+        "OQPSK": 2
+      }
+    },
+    "calibration": {
+      "median_confidence_correct": 0.6060101389884949,
+      "median_confidence_wrong": 0.07708551734685898,
+      "max_confidence_wrong": 0.7742336988449097,
+      "wrong_above_0.9": 0,
+      "wrong_above_0.99": 0,
+      "wrong_total": 8876,
+      "calibration_inverted": false
+    },
+    "notes": [
+      "model chooses among 24 classes"
+    ]
+  }
+}
