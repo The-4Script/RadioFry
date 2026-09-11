@@ -11,9 +11,25 @@ def preprocess(
     *,
     target_sample_rate: float | None = None,
 ) -> UnifiedSignalContainer:
-    """Remove DC, normalize average power, and optionally resample IQ."""
+    """Remove DC, normalize average power, and optionally resample IQ.
+
+    Non-finite samples are zeroed first. A single NaN or Inf anywhere in the capture makes
+    `np.mean` non-finite, and subtracting that mean propagates it to **every** sample - so
+    one dropped sample from an SDR, or one gap in a WAV, silently destroyed the whole
+    capture: every parameter came back `None` while the classifier still produced a label.
+    The count is recorded in `metadata["non_finite_samples"]` so a caller can report it
+    rather than having to notice the damage downstream.
+
+    Zero is the substitution rather than an interpolated value: this is power-normalised
+    data and zero adds nothing, whereas interpolating would invent signal that was never
+    received.
+    """
 
     iq = signal.iq.astype(np.complex64, copy=True)
+    finite = np.isfinite(iq)
+    non_finite = int(finite.size - int(np.count_nonzero(finite)))
+    if non_finite:
+        iq[~finite] = 0.0
     iq -= np.mean(iq, dtype=np.complex64)
     rms = float(np.sqrt(np.mean(np.abs(iq) ** 2))) if iq.size else 0.0
     if rms > 0:
@@ -34,6 +50,7 @@ def preprocess(
 
     metadata = dict(signal.metadata)
     metadata["preprocessed"] = True
+    metadata["non_finite_samples"] = non_finite
     return UnifiedSignalContainer(
         iq=iq,
         sample_rate=sample_rate,

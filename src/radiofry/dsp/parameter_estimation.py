@@ -36,6 +36,23 @@ SYMBOL_RATE_FEATURES = {
 }
 
 
+# Reported occupied bandwidth (BANK.md Entry 041).
+#
+# For a rectangular-pulse linear modulation the main lobe spans +/-Rs, so BW/Rs ~ 2 is
+# the physical target. Measured over 240 captures (6 modulations x samples-per-symbol
+# 4/8/16/32 x SNR 20..0 dB x 2 seeds), the median BW/Rs by oversampling factor was:
+#
+#   fraction   sps4   sps8  sps16  sps32
+#     0.99     3.65   7.35  14.73  29.00   <- tracks the sample rate, not the signal
+#     0.90     2.41   3.23   4.86   6.75
+#     0.85     1.43   2.11   2.71   2.92   <- closest to 2 and roughly sps-independent
+#     0.80     1.18   1.29   1.36   1.41   <- inside the main lobe
+#
+# 0.85 is the tightest fraction that still brackets the main lobe. It is deliberately
+# NOT used for the noise-floor band; see `estimate_parameters`.
+BANDWIDTH_FRACTION = 0.85
+
+
 # Cyclostationary symbol-rate estimation (BANK.md Entry 038).
 #
 # A signal built from symbols at rate Rs is cyclostationary with cycle frequencies at
@@ -57,6 +74,22 @@ SYMBOL_RATE_FEATURES = {
 # Measured over 120 FSK captures (2 modulations x sps 4/8/16/32 x SNR 20/15/10 x 5 seeds):
 # a gate of 6.0 gained 4 correct estimates with ZERO regressions, while lower gates gained
 # more but regressed 4-8 captures.
+# Lowest symbol rate the peak search will consider, as fs / MAX_SAMPLES_PER_SYMBOL
+# (BANK.md Entry 042).
+#
+# A burst - any capture that is not transmitting for its whole duration - puts a strong
+# line at the burst envelope's own fundamental, near fs/N, together with a dense harmonic
+# series. `_select_symbol_rate` rewards harmonic support, so that series outscored the
+# real symbol-rate line and the estimate collapsed to ~24 Hz at fs = 200 kHz: at 75% duty
+# the reported rate was 24 Hz against a true 25,000 Hz. The symbol-rate line itself was
+# still present at full strength; only the selection was wrong.
+#
+# 256 is deliberately generous: the project generates, trains on and demodulates
+# oversampling factors 4-32, so this excludes nothing that has ever been validated. It
+# does exclude genuinely narrowband captures at a very high sample rate (sps > 256), which
+# are outside the evaluated envelope; revisit this bound if such captures become real.
+MAX_SAMPLES_PER_SYMBOL = 256
+
 CYCLIC_LAGS = (1, 2, 3, 4, 6, 8)
 CYCLIC_PEAK_RATIO_MIN = 6.0
 _CYCLIC_ALPHA_MIN_HZ = 500.0
@@ -140,6 +173,10 @@ def _symbol_rate_candidate(powered: np.ndarray, sample_rate: float) -> tuple[flo
     spectrum = np.abs(np.fft.rfft(powered - np.mean(powered)))
     rates = np.fft.rfftfreq(powered.size, d=1 / sample_rate)
     spectrum[0] = 0
+    # Suppress the burst-envelope region before peak selection; see
+    # MAX_SAMPLES_PER_SYMBOL. Without this a duty-cycled capture locks onto its own
+    # envelope period instead of its symbol clock.
+    spectrum[rates < sample_rate / MAX_SAMPLES_PER_SYMBOL] = 0
     peaks, properties = find_peaks(spectrum, prominence=max(float(np.median(spectrum)) * 2.0, 1e-12))
     return _select_symbol_rate(
         rates,
@@ -153,9 +190,24 @@ def estimate_parameters(
     signal: UnifiedSignalContainer,
     *,
     occupied_fraction: float = 0.99,
+    bandwidth_fraction: float = BANDWIDTH_FRACTION,
     nperseg: int = 1024,
 ) -> ParameterEstimate:
-    """Estimate carrier, occupied bandwidth, SNR, and a symbol-rate spectral line."""
+    """Estimate carrier, occupied bandwidth, SNR, and a symbol-rate spectral line.
+
+    Two power fractions, because one band cannot serve both purposes:
+
+    * `occupied_fraction` (0.99) bounds the band that is treated as *signal* when the
+      noise floor is measured from everything outside it. It has to be generous, or the
+      "out of band" region still contains signal and the noise floor is overestimated.
+    * `bandwidth_fraction` (0.85) is what gets *reported* as the occupied bandwidth. It
+      has to be tight, because at finite SNR the noise carries enough of the total power
+      that a 0.99 criterion returns very nearly the whole sampled band whatever the
+      signal is.
+
+    Using 0.99 for both is what made the reported bandwidth ~0.9 x the sample rate for
+    every capture regardless of its symbol rate (BANK.md Entry 041).
+    """
 
     if signal.sample_rate is None or signal.iq.size < 8:
         return ParameterEstimate(None, None, None)
@@ -164,6 +216,8 @@ def estimate_parameters(
     order = np.argsort(frequencies)
     frequencies, psd = frequencies[order], np.real(psd[order])
     lower, upper = _occupied_band(psd, frequencies, occupied_fraction)
+    # Reported separately and more tightly - see the docstring.
+    band_lower, band_upper = _occupied_band(psd, frequencies, bandwidth_fraction)
     in_band = (frequencies >= lower) & (frequencies <= upper)
     out_band = ~in_band
     signal_power = float(np.mean(psd[in_band])) if np.any(in_band) else 0.0
@@ -194,7 +248,7 @@ def estimate_parameters(
         symbol_rate_confidence = float(np.clip(cyclic_ratio / (cyclic_ratio + 10.0), 0.0, 1.0))
 
     return ParameterEstimate(
-        abs(upper - lower),
+        abs(band_upper - band_lower),
         snr_db,
         symbol_rate,
         parameter_method,
