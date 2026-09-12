@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 from typing import Any, Iterator
 
-from radiofry.reporting.report_builder import report_json
+from radiofry.reporting.report_builder import _json_safe
 
 GPT_MODEL = "openai/gpt-oss-120b"
 REVIEW_MODEL = "qwen/qwen3.8-27b"
@@ -50,17 +51,53 @@ def _client() -> Any:
     return Groq(api_key=api_key)
 
 
+def _compact_value(value: Any, *, depth: int = 0) -> Any:
+    """Keep descriptive evidence while excluding waveform/bitstream-sized arrays."""
+
+    if depth > 5:
+        return "[nested evidence omitted]"
+    if isinstance(value, dict):
+        return {
+            str(key): _compact_value(item, depth=depth + 1)
+            for key, item in value.items()
+            if str(key) not in {"bits", "symbols", "samples", "waveform", "iq", "spectrum"}
+        }
+    if isinstance(value, (list, tuple)):
+        if len(value) > 12:
+            return [_compact_value(item, depth=depth + 1) for item in value[:12]] + [
+                f"[{len(value) - 12} items omitted]"
+            ]
+        return [_compact_value(item, depth=depth + 1) for item in value]
+    return value
+
+
+def _ai_report_context(report: dict[str, Any], limit: int = 8000) -> str:
+    """Build a bounded prompt context; the complete report remains available locally."""
+
+    compact = _compact_value(_json_safe(report))
+    encoded = json.dumps(compact, separators=(",", ":"), sort_keys=True)
+    return encoded[:limit] + ("...[context truncated]" if len(encoded) > limit else "")
+
+
 def _stream(model: str, prompt: str, *, temperature: float, top_p: float, reasoning_effort: str) -> Iterator[str]:
-    completion = _client().chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=temperature,
-        max_completion_tokens=2048,
-        top_p=top_p,
-        reasoning_effort=reasoning_effort,
-        stream=True,
-        stop=None,
-    )
+    from groq import RateLimitError
+
+    try:
+        completion = _client().chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=temperature,
+            max_completion_tokens=2048,
+            top_p=top_p,
+            reasoning_effort=reasoning_effort,
+            stream=True,
+            stop=None,
+        )
+    except RateLimitError as error:
+        raise RuntimeError(
+            "Groq rejected the request because it exceeded the model or account limit. "
+            "The evidence prompt was bounded; wait briefly and try again."
+        ) from error
     for chunk in completion:
         if chunk.choices:
             content = chunk.choices[0].delta.content
@@ -76,7 +113,7 @@ def stream_executive_brief(report: dict[str, Any]) -> Iterator[str]:
         "Do not invent measurements, protocols, or certainty. Write a concise report with "
         "headings: Assessment, Evidence, Caveats, and Next action. Explain what the current "
         "result means for an engineer and explicitly distinguish model confidence from proof.\n\n"
-        f"REPORT JSON:\n{report_json(report)[:24000]}"
+        f"REPORT JSON (bounded evidence context):\n{_ai_report_context(report)}"
     )
     return _stream(GPT_MODEL, prompt, temperature=1, top_p=1, reasoning_effort="medium")
 
@@ -89,7 +126,7 @@ def stream_critical_review(report: dict[str, Any], brief: str) -> Iterator[str]:
         "against the original evidence. Identify unsupported claims, missing evidence, and "
         "the smallest useful follow-up measurement. Be specific and concise. Never upgrade "
         "an unavailable or reviewable stage into a confirmed result.\n\n"
-        f"ORIGINAL REPORT:\n{report_json(report)[:18000]}\n\n"
-        f"FIRST ANALYST BRIEF:\n{brief[:10000]}"
+        f"ORIGINAL REPORT (bounded evidence context):\n{_ai_report_context(report, 6000)}\n\n"
+        f"FIRST ANALYST BRIEF:\n{brief[:5000]}"
     )
     return _stream(REVIEW_MODEL, prompt, temperature=0.6, top_p=0.95, reasoning_effort="default")
