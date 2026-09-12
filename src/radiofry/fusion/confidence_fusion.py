@@ -22,6 +22,11 @@ class FusionResult:
     # unaffected.
     digital_family_block: bool = False
     analog_subtype_margin: float | None = None
+    # Human-review urgency, not a probability: low means inspect routinely, medium means
+    # corroborate before relying on it, and high means the result is unsafe to automate.
+    review_level: str = "high"
+    # Retain the model's best hypothesis for human inspection when fusion rejects it.
+    hypothesis_label: str = ""
 
 
 _FAMILY_BY_LABEL = {
@@ -170,6 +175,7 @@ def fuse_modulation(
                 analog_fallback=True,
                 analog_route="classical_subtype",
                 analog_subtype_margin=analog_subtype_margin(classical_evidence),
+                review_level="high",
             )
 
     # Entry 034 - the mirror of the Entry 032 gate. A CNN analog label must not override
@@ -200,6 +206,7 @@ def fuse_modulation(
                 classical_family=classical_family,
                 alternatives=alternatives,
                 digital_family_block=True,
+                review_level="high",
             )
         return FusionResult(
             label="Unclassified",
@@ -208,6 +215,7 @@ def fuse_modulation(
             classical_family=classical_family,
             alternatives=alternatives,
             digital_family_block=True,
+            review_level="high",
         )
 
     if rejected and classical_family == ANALOG_FAMILY and ml_label not in ANALOG_LABELS:
@@ -225,6 +233,7 @@ def fuse_modulation(
                 alternatives=alternatives,
                 analog_fallback=True,
                 analog_route="cnn_alternative",
+                review_level="high",
             )
 
     return FusionResult(
@@ -233,4 +242,6 @@ def fuse_modulation(
         review_recommended=rejected or not agrees,
         classical_family=classical_family,
         alternatives=alternatives,
+        review_level="high" if rejected else ("medium" if not agrees else "low"),
+        hypothesis_label=ml_label if rejected and ml_label not in {"", "Unclassified"} else "",
     )

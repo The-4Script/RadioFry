@@ -44,6 +44,7 @@ def build_report(*, source: dict[str, Any], stages: dict[str, Any]) -> dict[str,
         "trust_score": float(fusion_dict.get("trust_score", 0.0) or 0.0),
         "model_confidence": float(prediction_dict.get("confidence", 0.0) or 0.0),
         "review_recommended": review_required,
+        "review_level": str(fusion_dict.get("review_level", "high")),
         "key_metrics": {
             "carrier_frequency_hz": parameters_dict.get("carrier_frequency_hz"),
             "occupied_bandwidth_hz": parameters_dict.get("occupied_bandwidth_hz"),

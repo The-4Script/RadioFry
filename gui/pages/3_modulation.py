@@ -20,6 +20,12 @@ else:
     prediction = report["stages"].get("cnn_modulation", {})
     parameters = report["stages"].get("parameters", {})
     fusion = report["stages"].get("fusion", {})
+    review_level = str(fusion.get("review_level", "high")).lower()
+    review_labels = {
+        "low": "LOW - routine human review",
+        "medium": "MEDIUM - corroborate before relying on it",
+        "high": "HIGH - human review required",
+    }
     left, right = st.columns(2)
     with left:
         st.markdown("<div class='evidence-panel'><h3>Independent checks</h3>", unsafe_allow_html=True)
@@ -28,9 +34,14 @@ else:
         st.markdown("</div>", unsafe_allow_html=True)
     with right:
         st.markdown("<div class='evidence-panel'><h3>Fused hypothesis</h3>", unsafe_allow_html=True)
-        st.metric("Decision", fusion.get("label", "Unclassified"))
+        decision = fusion.get("label", "Unclassified")
+        hypothesis = fusion.get("hypothesis_label", "")
+        st.metric("Decision", decision)
+        if decision == "Unclassified" and hypothesis:
+            st.caption(f"Review hypothesis: {hypothesis} (not safe to automate)")
         st.metric("Fused trust score (heuristic)", f"{fusion.get('trust_score', 0):.1%}")
         st.caption("Agreement-adjusted score; not a calibrated probability.")
+        st.warning(f"Human review: {review_labels.get(review_level, 'HIGH - human review required')}")
         st.caption(f"CNN top-1: {prediction.get('confidence', 0):.1%}")
         expected_accuracy = _expected_cnn_accuracy(parameters.get("snr_db"))
         if expected_accuracy is not None:

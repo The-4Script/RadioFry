@@ -32,6 +32,10 @@ _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODULATION_MODEL = "models_saved/modulation_cnn_v3_spsaug.pt"
 DEFAULT_MAX_CAPTURE_BYTES = 64 * 1024 * 1024
 DEFAULT_MAX_CAPTURE_SAMPLES = 5_000_000
+# Feature extraction is representative, not an exhaustive scan. Keeping the expensive
+# phase/FFT paths bounded prevents runtime from growing linearly with long WAV uploads.
+DEFAULT_ANALYSIS_SAMPLES = 65_536
+DEFAULT_DEMODULATION_SAMPLES = 131_072
 
 
 def _resolve_default_path(path: str | Path, relative_to_repository: bool = True) -> Path:
@@ -39,6 +43,31 @@ def _resolve_default_path(path: str | Path, relative_to_repository: bool = True)
     if relative_to_repository and not candidate.is_absolute():
         return _REPOSITORY_ROOT / candidate
     return candidate
+
+
+def _bounded_signal(
+    signal: UnifiedSignalContainer,
+    maximum_samples: int,
+    *,
+    purpose: str,
+) -> UnifiedSignalContainer:
+    """Return a centred native-rate view for expensive analysis stages."""
+
+    if signal.iq.size <= maximum_samples:
+        return signal
+    start = (signal.iq.size - maximum_samples) // 2
+    metadata = dict(signal.metadata)
+    metadata[f"{purpose}_window"] = {
+        "start_sample": start,
+        "samples": maximum_samples,
+        "original_samples": int(signal.iq.size),
+    }
+    return UnifiedSignalContainer(
+        signal.iq[start : start + maximum_samples],
+        signal.sample_rate,
+        signal.source_format,
+        metadata,
+    )
 
 
 def load_capture(
@@ -70,7 +99,8 @@ def analyze_capture(
     fec_override: str | None = None,
 ) -> dict[str, Any]:
     processed = preprocess(signal, target_sample_rate=target_sample_rate)
-    parameters = estimate_parameters(processed)
+    analysis_signal = _bounded_signal(processed, DEFAULT_ANALYSIS_SAMPLES, purpose="analysis")
+    parameters = estimate_parameters(analysis_signal)
     if symbol_rate_override is not None:
         if symbol_rate_override <= 0:
             raise ValueError("symbol_rate_override must be positive")
@@ -82,7 +112,7 @@ def analyze_capture(
             symbol_rate_confidence=1.0,
             symbol_rate_feature="manual_override",
         )
-    classical = estimate_modulation_family(processed.iq)
+    classical = estimate_modulation_family(analysis_signal.iq)
     prediction = predict_modulation(processed, _resolve_default_path(model_path))
     fusion = None
     if prediction.available:
@@ -93,7 +123,12 @@ def analyze_capture(
         fusion = fuse_modulation(prediction.label, prediction.confidence, classical.family, alternatives=tuple(label for label, _ in ranked), ranked_alternatives=ranked, classical_evidence=getattr(classical, "evidence", None), classical_confidence=classical.confidence)
     demodulation = None
     if bits is None and fusion is not None:
-        dispatched = demodulate_capture(processed, fusion.label, parameters)
+        demodulation_signal = _bounded_signal(
+            processed,
+            DEFAULT_DEMODULATION_SAMPLES,
+            purpose="demodulation",
+        )
+        dispatched = demodulate_capture(demodulation_signal, fusion.label, parameters)
         demodulation = dispatched
         if dispatched.available and dispatched.result is not None:
             bits = dispatched.result.bits
@@ -145,6 +180,11 @@ def analyze_capture(
     runtime["fec_support"] = check_fec_support()
     runtime["environment"] = check_runtime_environment()
     source_metadata = dict(processed.metadata)
+    for key in ("analysis_window", "demodulation_window"):
+        if key in analysis_signal.metadata:
+            source_metadata[key] = analysis_signal.metadata[key]
+        if demodulation is not None and key in demodulation_signal.metadata:
+            source_metadata[key] = demodulation_signal.metadata[key]
     if processed.sample_rate is None:
         source_metadata.setdefault("sample_rate_source", "unavailable")
     return build_report(
@@ -155,5 +195,5 @@ def analyze_capture(
             "samples": processed.iq.size,
             "metadata": source_metadata,
         },
-        stages={"runtime": runtime, "parameters": parameters, "classical_modulation": classical, "cnn_modulation": prediction, "fusion": fusion or {"label": "Unclassified", "trust_score": 0.0, "review_recommended": True, "message": prediction.message}, "demodulation": demodulation_stage, "bitstream_analysis": bitstream_stages},
+        stages={"runtime": runtime, "parameters": parameters, "classical_modulation": classical, "cnn_modulation": prediction, "fusion": fusion or {"label": "Unclassified", "trust_score": 0.0, "review_recommended": True, "review_level": "high", "message": prediction.message}, "demodulation": demodulation_stage, "bitstream_analysis": bitstream_stages},
     )

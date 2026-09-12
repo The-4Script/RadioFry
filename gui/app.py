@@ -121,13 +121,17 @@ if uploaded is not None:
             st.error("Analysis cannot start until the runtime dependencies are repaired.")
             st.stop()
         try:
-            signal = load_capture(temporary_path, sample_rate=sample_rate or None, iq_format=iq_format)
-            report = analyze_capture(
-                signal,
-                symbol_rate_override=symbol_rate_input or None,
-                interleaver_override=interleaver_override,
-                fec_override=fec_override,
-            )
+            with st.spinner(
+                "Analyzing capture: extracting bounded signal evidence and running the model. "
+                "Please wait; repeated clicks cannot start a second run."
+            ):
+                signal = load_capture(temporary_path, sample_rate=sample_rate or None, iq_format=iq_format)
+                report = analyze_capture(
+                    signal,
+                    symbol_rate_override=symbol_rate_input or None,
+                    interleaver_override=interleaver_override,
+                    fec_override=fec_override,
+                )
             st.session_state["report"] = report
             st.session_state["signal"] = signal
             st.session_state["upload_analysis_key"] = uploaded.name
