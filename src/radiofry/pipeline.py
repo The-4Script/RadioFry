@@ -127,9 +127,9 @@ def analyze_capture(
             "fec_decoding": decoded,
             "correlation": correlation,
             "bits": len(bits),
-            "classification_only": selected_fec in {"unknown", "ldpc"} and not decoded.success,
+            "classification_only": selected_fec in {"unknown", "ldpc"} and not getattr(decoded, "success", False),
             "verification": {
-                "fec_verified": bool(decoded.success),
+                "fec_verified": bool(getattr(decoded, "success", False)),
                 "protocol_verified": False,
                 "correlation_is_hypothesis_only": True,
             },
