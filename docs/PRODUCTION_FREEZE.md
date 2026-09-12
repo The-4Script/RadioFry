@@ -12,7 +12,7 @@ drifted or the freeze needs deliberately re-cutting with a BANK entry recording 
 | | |
 |---|---|
 | Production checkpoint | `models_saved/modulation_cnn_v3_spsaug.pt` |
-| Checkpoint file SHA-256 | `1444cf667fb017a79df5c50489fe5113b8cde4e0c2640f4a0cb8f2741f52530b` |
+| Checkpoint file SHA-256 | `2c20f48b077cd3b4a463305935417ae89033e4417ded75ea9c9d942571c10c14` |
 | **Weights** SHA-256 (`hash_state_dict_contents`) | `65bb179501f6cbea2cadaa0a64b391e452f930115c38e4e513b7a28c65ed079b` |
 | `state_dict` SHA-256, legacy (`hash_torch_state_dict`) | `a7b02533a7c7129c5435abb7fa12f95fb1af90188115c7c3cb96d9e580ce5a40` — traceability only |
 | Labels (8, digital only) | 8PSK, BPSK, CPFSK, GFSK, PAM4, QAM16, QAM64, QPSK |

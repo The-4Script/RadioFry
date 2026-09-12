@@ -28,7 +28,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 # --- the frozen identities -------------------------------------------------------------
 FROZEN_CHECKPOINT = "models_saved/modulation_cnn_v3_spsaug.pt"
 FROZEN_FILE_SHA256 = (
-    "1444cf667fb017a79df5c50489fe5113b8cde4e0c2640f4a0cb8f2741f52530b")
+    "2c20f48b077cd3b4a463305935417ae89033e4417ded75ea9c9d942571c10c14")
 FROZEN_WEIGHTS_SHA256 = (
     "65bb179501f6cbea2cadaa0a64b391e452f930115c38e4e513b7a28c65ed079b")
 
