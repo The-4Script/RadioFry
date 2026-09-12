@@ -80,7 +80,7 @@ def test_the_detector_now_publishes_envelope_flatness() -> None:
 
 def test_the_detector_family_decision_is_unchanged_by_the_new_field() -> None:
     # envelope_flatness is recorded as evidence only; it must not alter the family logic.
-    for modulation, expected in [("BPSK", "FSK-like"), ("16QAM", "QAM-like"),
+    for modulation, expected in [("BPSK", "PSK-like"), ("16QAM", "QAM-like"),
                                  ("BFSK", "FSK-like"), ("PAM4", "QAM-like")]:
         assert estimate_modulation_family(_digital(modulation).iq).family == expected
 

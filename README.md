@@ -17,7 +17,9 @@ PYTHONPATH=src streamlit run gui/app.py --server.headless true
 ```
 
 The hosted application uses the checked-in inference artifacts in
-`models_saved/`. The three required files are `modulation_cnn.pt`,
+`models_saved/`. The production modulation checkpoint is
+`modulation_cnn_v3_spsaug.pt` and its companion
+`modulation_cnn_v3_spsaug_metrics.json`; the other required files are
 `interleaver_classifier.pkl`, and `fec_classifier.pkl`. The application reports
 missing or invalid artifacts as unavailable analysis stages rather than
 accepting a result as definitive.

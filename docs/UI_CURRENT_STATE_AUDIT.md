@@ -1,7 +1,7 @@
 # RadioFry UI/UX Current State Audit
 
 *Date: September 2026*
-*Target: Current RadioFry Repository*
+*Target: Current RadioFry Repository (verified 2026-09-12)*
 
 This document provides an exact, factual mapping of the current RadioFry GUI implementation. It is an inspection output intended to brief subsequent UI/UX engineering efforts. It does not propose changes, fixes, or refactoring.
 
@@ -9,8 +9,8 @@ This document provides an exact, factual mapping of the current RadioFry GUI imp
 
 - **Framework**: Streamlit
 - **Entry Point**: `gui/app.py`
-  - Initializes `st.set_page_config` (Title: "RadioFry", Icon: "🍟", Layout: "wide", Initial Sidebar: "collapsed").
-  - Imports and applies the central theme via `radiofry.gui.theme.apply_radiofry_theme()`.
+  - Initializes `st.set_page_config` (Title: "RadioFry", Icon: "RF", Layout: "wide").
+  - Imports and applies the central theme via `gui/theme.py`.
   - Serves as the ingest/trigger point ("Upload Signal", "Analyze capture" button).
   - Handles initial WAV/IQ ingestion, triggering `analyze_capture(signal)`, and storing the resulting `report` and `signal` in `st.session_state`.
 - **Page Directory**: `gui/pages/` containing 13 individual Streamlit page files.
@@ -32,9 +32,10 @@ This document provides an exact, factual mapping of the current RadioFry GUI imp
 ## 3. Session State & Pipeline Integration
 
 The GUI is entirely state-driven based on the `st.session_state` dictionary:
-- `st.session_state["signal"]`: Holds the ingested signal object (e.g., `MemoryMappedWavSignal`).
+- `st.session_state["signal"]`: Holds the ingested `UnifiedSignalContainer`.
 - `st.session_state["report"]`: A dictionary output from the `analyze_capture` pipeline containing results from all stages.
-- `st.session_state["parameters"]`: Extracted from `report["stages"]["parameters"]["result"]` in `app.py`.
+- The current home page does not create a separate `parameters` session key; parameter
+  estimates remain under `report["stages"]["parameters"]`.
 - **Signal Time Machine State Variables** (`9_time_machine.py`):
   - `stm_playing` (bool): Playback active state.
   - `stm_frozen` (bool): Playback freeze state.

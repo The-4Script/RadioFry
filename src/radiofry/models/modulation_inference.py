@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from radiofry.contracts import UnifiedSignalContainer
-from radiofry.models.artifact_integrity import hash_torch_state_dict, metrics_path
+from radiofry.models.artifact_integrity import hash_state_dict_contents, metrics_path
 
 
 @dataclass(frozen=True)
@@ -90,15 +90,10 @@ def predict_modulation(
         # This loader trusts self-produced files in models_saved; do not use external checkpoints.
         payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
         expected_hash = payload.get("model_sha256")
-        actual_hash = hash_torch_state_dict(payload["state_dict"])
+        actual_hash = hash_state_dict_contents(payload["state_dict"])
         metrics_file = metrics_path(checkpoint)
-        
-        import os
-        is_test_env = "PYTEST_CURRENT_TEST" in os.environ or os.environ.get("CI") == "true"
-        
-        if not is_test_env:
-            if not expected_hash or expected_hash != actual_hash:
-                return ModulationPrediction("Unclassified", 0.0, (), False, "CNN artifact integrity check failed: checkpoint hash is missing or invalid.")
+        if not expected_hash or expected_hash != actual_hash:
+            return ModulationPrediction("Unclassified", 0.0, (), False, "CNN artifact integrity check failed: checkpoint hash is missing or invalid.")
         
         if not metrics_file.is_file():
             return ModulationPrediction("Unclassified", 0.0, (), False, f"CNN metrics not found: {metrics_file}")
@@ -106,9 +101,8 @@ def predict_modulation(
         import json
         metrics = json.loads(metrics_file.read_text(encoding="utf-8"))
         
-        if not is_test_env:
-            if metrics.get("model_sha256") != actual_hash:
-                return ModulationPrediction("Unclassified", 0.0, (), False, "CNN artifact integrity check failed: metrics do not match checkpoint.")
+        if metrics.get("model_sha256") != actual_hash:
+            return ModulationPrediction("Unclassified", 0.0, (), False, "CNN artifact integrity check failed: metrics do not match checkpoint.")
         labels = list(payload["labels"])
         model = ModulationCNN(int(payload.get("input_channels", 2)), len(labels))
         model.load_state_dict(payload["state_dict"])

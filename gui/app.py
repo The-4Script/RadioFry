@@ -13,8 +13,17 @@ import streamlit as st
 
 from gui.theme import apply_radiofry_theme, render_method_note, render_sidebar
 from radiofry.ingestion.iq_parser import IQFormat
-from radiofry.pipeline import DEFAULT_MAX_CAPTURE_BYTES, analyze_capture, load_capture
 from radiofry.reporting.report_builder import build_pdf_report, report_json
+from radiofry.runtime import check_runtime_environment
+
+_pipeline_import_error: Exception | None = None
+try:
+    from radiofry.pipeline import DEFAULT_MAX_CAPTURE_BYTES, analyze_capture, load_capture
+except (ImportError, OSError, RuntimeError, ValueError) as error:
+    _pipeline_import_error = error
+    DEFAULT_MAX_CAPTURE_BYTES = 64 * 1024 * 1024
+    analyze_capture = None
+    load_capture = None
 
 
 def _cleanup_upload(path: Path) -> None:
@@ -24,6 +33,17 @@ def _cleanup_upload(path: Path) -> None:
 st.set_page_config(page_title="RadioFry", page_icon="RF", layout="wide")
 apply_radiofry_theme()
 render_sidebar(active_stage=0, has_analysis="report" in st.session_state)
+
+_environment = check_runtime_environment()
+if not _environment["ready"]:
+    st.warning(
+        "Runtime health check: Python/native dependencies are not fully available. "
+        "The report will preserve this limitation instead of fabricating analysis."
+    )
+    with st.expander("Runtime diagnostics", expanded=False):
+        st.json(_environment)
+if _pipeline_import_error is not None:
+    st.error(f"Analysis pipeline unavailable: {_pipeline_import_error}")
 
 st.markdown(
     """
@@ -72,8 +92,8 @@ if uploaded is not None:
             symbol_rate_input = st.number_input("Symbol rate override (Hz)", min_value=0.0, value=0.0, help="Leave at zero to use the estimator.")
             interleaver_choice = st.selectbox("Interleaver", ["Auto", "None", "Block", "Convolutional", "Diagonal", "Pseudo-random"])
         with control_right:
-            fec_choice = st.selectbox("FEC", ["Auto", "None", "Convolutional", "Reed-Solomon", "Concatenated"])
-            st.caption("LDPC classification is reported for review, but decoding is not selectable without code metadata.")
+            fec_choice = st.selectbox("FEC", ["Auto", "None", "Convolutional", "Reed-Solomon", "Concatenated", "LDPC"])
+            st.caption("LDPC is selectable for explicit classification, but decoding requires a parity-check matrix.")
 
     interleaver_override = interleaver_choice.lower().replace("-", "_") if interleaver_choice != "Auto" else None
     fec_override = fec_choice.lower().replace("-", "_") if fec_choice != "Auto" else None
@@ -97,6 +117,9 @@ if uploaded is not None:
         iq_format = IQFormat(dtype, byte_order)
 
     if analyze:
+        if analyze_capture is None or load_capture is None:
+            st.error("Analysis cannot start until the runtime dependencies are repaired.")
+            st.stop()
         try:
             signal = load_capture(temporary_path, sample_rate=sample_rate or None, iq_format=iq_format)
             report = analyze_capture(

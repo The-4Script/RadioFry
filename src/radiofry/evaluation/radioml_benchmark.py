@@ -65,7 +65,7 @@ def load_model(checkpoint_path: str | Path, device):
     """Load a checkpoint and return (model, labels, sha256, payload)."""
 
     import torch
-    from radiofry.models.artifact_integrity import hash_torch_state_dict
+    from radiofry.models.artifact_integrity import hash_state_dict_contents
     from radiofry.models.modulation_cnn import ModulationCNN
 
     payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
@@ -73,7 +73,7 @@ def load_model(checkpoint_path: str | Path, device):
     model = ModulationCNN(int(payload.get("input_channels", 4)), len(labels))
     model.load_state_dict(payload["state_dict"])
     model.eval().to(device)
-    return model, labels, hash_torch_state_dict(payload["state_dict"]), payload
+    return model, labels, hash_state_dict_contents(payload["state_dict"]), payload
 
 
 def predict(model, frames: np.ndarray, device, *, batch: int = 2048) -> np.ndarray:

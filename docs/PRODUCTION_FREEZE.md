@@ -14,7 +14,7 @@ drifted or the freeze needs deliberately re-cutting with a BANK entry recording 
 | Production checkpoint | `models_saved/modulation_cnn_v3_spsaug.pt` |
 | Checkpoint file SHA-256 | `1444cf667fb017a79df5c50489fe5113b8cde4e0c2640f4a0cb8f2741f52530b` |
 | **Weights** SHA-256 (`hash_state_dict_contents`) | `65bb179501f6cbea2cadaa0a64b391e452f930115c38e4e513b7a28c65ed079b` |
-| `state_dict` SHA-256, legacy (`hash_torch_state_dict`) | `a7b02533a7c7129c5435abb7fa12f95fb1af90188115c7c3cb96d9e580ce5a40` — **not portable, see below** |
+| `state_dict` SHA-256, legacy (`hash_torch_state_dict`) | `a7b02533a7c7129c5435abb7fa12f95fb1af90188115c7c3cb96d9e580ce5a40` — traceability only |
 | Labels (8, digital only) | 8PSK, BPSK, CPFSK, GFSK, PAM4, QAM16, QAM64, QPSK |
 | Input representation | 4-channel `iqap`, 128-sample frames |
 | Inference | 4 windows, mean-softmax (`DEFAULT_INFERENCE_WINDOWS = 4`) |
@@ -33,10 +33,9 @@ drifted or the freeze needs deliberately re-cutting with a BANK entry recording 
 > dtype, shape and raw little-endian bytes. `a7b02533…` is kept for traceability because
 > BANK quotes it throughout, but it is **no longer asserted**.
 >
-> **Open, not fixed:** `models/modulation_inference.predict_modulation` still verifies with
-> the legacy hash, so on a machine whose torch serialises differently every prediction
-> returns `Unclassified` with "CNN artifact integrity check failed". The check is bypassed
-> when `CI=true` or under pytest, so no test catches it. See Entry 046 for the proposed fix.
+> **Fixed:** inference and training now verify and publish the portable content hash.
+> The environment-based pytest/CI bypass was removed. The legacy value remains only for
+> historical traceability; new manifests use the portable weights hash above.
 
 Weights, labels **and** inference configuration are all pinned: the recorded baselines were
 measured with a 128-sample frame and 4 windows, so changing either invalidates them even if

@@ -96,7 +96,7 @@ def test_the_evidence_dictionary_still_exposes_the_original_features() -> None:
 
 
 @pytest.mark.parametrize("modulation,expected", [
-    ("BPSK", "FSK-like"), ("QPSK", "FSK-like"), ("8PSK", "FSK-like"),
+    ("BPSK", "PSK-like"), ("QPSK", "PSK-like"), ("8PSK", "FSK-like"),
     ("BFSK", "FSK-like"), ("GFSK", "FSK-like"),
     ("16QAM", "QAM-like"), ("64QAM", "QAM-like"), ("PAM4", "QAM-like"),
 ])

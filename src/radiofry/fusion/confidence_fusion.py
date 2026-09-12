@@ -21,6 +21,7 @@ class FusionResult:
     # positive DIGITAL family verdict (Entry 034). Defaulted, so existing readers are
     # unaffected.
     digital_family_block: bool = False
+    analog_subtype_margin: float | None = None
 
 
 _FAMILY_BY_LABEL = {
@@ -93,6 +94,18 @@ def select_analog_subtype(evidence: dict[str, float]) -> str | None:
     return "AM-DSB"
 
 
+def analog_subtype_margin(evidence: dict[str, float]) -> float | None:
+    """Return distance from the nearest analog subtype threshold."""
+
+    flatness = evidence.get("envelope_flatness")
+    amplitude_cv = evidence.get("amplitude_cv")
+    if flatness is None or amplitude_cv is None:
+        return None
+    if flatness > ANALOG_ENVELOPE_FLATNESS_MAX:
+        return float(flatness - ANALOG_ENVELOPE_FLATNESS_MAX)
+    return float(abs(amplitude_cv - ANALOG_AMPLITUDE_CV_SSB_MIN))
+
+
 def _recover_analog_alternative(
     ranked_alternatives: tuple[tuple[str, float], ...],
 ) -> tuple[str, float] | None:
@@ -156,6 +169,7 @@ def fuse_modulation(
                 alternatives=alternatives,
                 analog_fallback=True,
                 analog_route="classical_subtype",
+                analog_subtype_margin=analog_subtype_margin(classical_evidence),
             )
 
     # Entry 034 - the mirror of the Entry 032 gate. A CNN analog label must not override

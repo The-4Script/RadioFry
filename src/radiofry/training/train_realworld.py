@@ -54,7 +54,7 @@ from radiofry.datasets.realworld_multipath import (
     open_split,
     select_indices,
 )
-from radiofry.models.artifact_integrity import hash_torch_state_dict, metrics_path
+from radiofry.models.artifact_integrity import hash_state_dict_contents, metrics_path
 
 FRAME_LENGTH = 128
 INFERENCE_WINDOWS = 4
@@ -323,7 +323,7 @@ def train(config: TrainingConfig) -> dict:
     elapsed = time.perf_counter() - started
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    digest = hash_torch_state_dict(best["state"])
+    digest = hash_state_dict_contents(best["state"])
     payload = {
         "state_dict": best["state"],
         "model_sha256": digest,

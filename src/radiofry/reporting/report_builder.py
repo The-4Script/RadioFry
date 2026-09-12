@@ -26,10 +26,27 @@ def _json_safe(value: Any) -> Any:
 def build_report(*, source: dict[str, Any], stages: dict[str, Any]) -> dict[str, Any]:
     """Build a stable report envelope while preserving stage-level results."""
 
+    fusion = stages.get("fusion", {})
+    bitstream = stages.get("bitstream_analysis", {})
+    review_required = (
+        bool(fusion.get("review_recommended", True))
+        if isinstance(fusion, dict)
+        else bool(getattr(fusion, "review_recommended", True))
+    )
+    verification = bitstream.get("verification", {}) if isinstance(bitstream, dict) else {}
     return {
-        "schema_version": "0.2",
+        "schema_version": "0.3",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": _json_safe(source),
+        "interpretation": {
+            "status": "research_prototype",
+            "human_review_required": review_required,
+            "protocol_verified": bool(
+                verification.get("protocol_verified", False)
+            ),
+            "confidence_is_not_field_accuracy": True,
+            "model_domain": "synthetic_or_unvalidated",
+        },
         "stages": _json_safe(stages),
     }
 
@@ -110,7 +127,7 @@ def build_pdf_report(report: dict[str, Any], output_path: str, signal: Any | Non
         figure.text(0.09, 0.76, "\n".join(lines), family="monospace", fontsize=12, va="top", linespacing=1.7)
         figure.text(0.09, 0.18, "Score definitions", fontsize=14, weight="bold")
         figure.text(0.09, 0.13, "CNN confidence is the model softmax probability. Fused trust score combines CNN confidence with independent classical family agreement. These values are intentionally different.", fontsize=10, wrap=True)
-        figure.text(0.09, 0.08, "Scope: the CNN is trained on RML2016.10a classes; out-of-distribution signals require human review and are not guaranteed to be classified.", fontsize=9, wrap=True)
+        figure.text(0.09, 0.08, "Scope: the production CNN is a synthetic-domain digital classifier; real-world accuracy and out-of-distribution correctness are not established. Human review remains required.", fontsize=9, wrap=True)
         pdf.savefig(figure, bbox_inches="tight")
         plt.close(figure)
 

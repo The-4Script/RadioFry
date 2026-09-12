@@ -23,6 +23,7 @@ if report is None:
     render_empty_state("Analyze a capture on the home page first.")
 else:
     source = report.get("source", {})
+    interpretation = report.get("interpretation", {})
     stages = report.get("stages", {})
     fusion = stages.get("fusion", {})
     bitstream = stages.get("bitstream_analysis", {})
@@ -32,6 +33,17 @@ else:
     left.metric("Source", str(source.get("format", "unknown")).upper())
     mid.metric("Samples", f"{source.get('samples', 0):,}")
     right.metric("Sample rate", source.get("sample_rate") or "Unknown")
+    st.caption(
+        "Status: {} · {} · protocol verification: {}".format(
+            interpretation.get("status", "unknown"),
+            "human review required"
+            if interpretation.get("human_review_required", True)
+            else "review not flagged",
+            "not established"
+            if not interpretation.get("protocol_verified", False)
+            else "verified",
+        )
+    )
 
     st.subheader("Stage status")
     status_rows = []
@@ -51,6 +63,7 @@ else:
         stages.get("demodulation", {}).get("message"),
         bitstream.get("deinterleaving", {}).get("limitation"),
         bitstream.get("fec_decoding", {}).get("message"),
+        correlation.get("false_alarm_assumption"),
     ]
     limitations = [item for item in limitations if item]
     if limitations:
@@ -77,4 +90,4 @@ else:
 
     with st.expander("Inspect raw report JSON", expanded=False):
         st.json(report)
-    render_method_note("What this report means", "The report preserves the pipeline's evidence and uncertainty. A label, confidence value, or recovered bit sequence should be interpreted alongside its assumptions and review notes.")
+    render_method_note("What this report means", "The report preserves the pipeline's evidence and uncertainty. A label, confidence value, or recovered bit sequence should be interpreted alongside its assumptions and review notes. Correlation is candidate pattern evidence, not protocol verification.")

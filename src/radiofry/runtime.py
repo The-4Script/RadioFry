@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+import importlib
+import sys
 from typing import Mapping
 
 
@@ -106,4 +108,37 @@ def check_fec_support() -> dict[str, object]:
         "notes": ("LDPC decoding additionally requires the code's parity-check matrix; "
                   "pseudo-random de-interleaving requires the generator seed. Neither is "
                   "recoverable from a captured bitstream alone."),
+    }
+
+
+def check_runtime_environment() -> dict[str, object]:
+    """Return actionable dependency diagnostics without importing them at startup."""
+
+    checks: dict[str, dict[str, object]] = {}
+    for module_name in ("numpy", "scipy", "torch", "streamlit"):
+        try:
+            module = importlib.import_module(module_name)
+            checks[module_name] = {
+                "available": True,
+                "version": str(getattr(module, "__version__", "unknown")),
+            }
+        except (ImportError, OSError, RuntimeError) as error:
+            checks[module_name] = {
+                "available": False,
+                "version": None,
+                "message": f"{type(error).__name__}: {error}",
+            }
+    python_supported = sys.version_info[:2] == (3, 11)
+    return {
+        "python": {
+            "version": ".".join(str(part) for part in sys.version_info[:3]),
+            "supported": python_supported,
+            "message": "Python 3.11 is the CI-supported runtime."
+            if python_supported
+            else "Python 3.11 is the CI-supported runtime; use a clean 3.11 environment.",
+        },
+        "dependencies": checks,
+        "ready": python_supported and all(
+            bool(check["available"]) for check in checks.values()
+        ),
     }

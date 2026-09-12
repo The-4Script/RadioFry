@@ -42,7 +42,11 @@ def read_wav(
         channel_mode = "mono_analytic"
     else:
         raise ValueError("WAV input must be mono or two-channel stereo")
-    metadata = {"channel_mode": channel_mode, "path": str(path)}
+    metadata = {
+        "channel_mode": channel_mode,
+        "path": str(path),
+        "sample_rate_source": "wav_header",
+    }
     # An ordinary WAV header has no field for an RF tuning frequency, so a sidecar is
     # the reliable route. The WAV's own sample rate is authoritative and is not overridden.
     sidecar = read_sigmf_sidecar(file_path)

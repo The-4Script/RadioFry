@@ -53,7 +53,7 @@ from radiofry.datasets.radioml2018 import (
     split_manifest,
     verify_layout,
 )
-from radiofry.models.artifact_integrity import hash_torch_state_dict, metrics_path
+from radiofry.models.artifact_integrity import hash_state_dict_contents, metrics_path
 from radiofry.training.device import describe_environment, verify_cuda
 from radiofry.training.train_realworld import (
     FRAME_LENGTH,
@@ -261,7 +261,7 @@ def train(config: RadioMLTrainingConfig) -> dict:
     model.load_state_dict(best["state"])
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    digest = hash_torch_state_dict(best["state"])
+    digest = hash_state_dict_contents(best["state"])
     torch.save({
         "state_dict": best["state"], "model_sha256": digest,
         "labels": list(config.classes), "input_channels": 4,

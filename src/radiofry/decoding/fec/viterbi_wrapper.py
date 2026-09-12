@@ -11,6 +11,7 @@ class FECResult:
     scheme: str
     success: bool
     message: str = ""
+    discarded_bits: int = 0
 
 
 def decode_convolutional(bits: np.ndarray, *, constraint_length: int = 7) -> FECResult:

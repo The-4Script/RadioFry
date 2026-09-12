@@ -24,6 +24,14 @@ def decode_fec(bits: np.ndarray, scheme: str, **parameters) -> FECResult:
         return decode_convolutional(values)
     if scheme == "reed_solomon":
         usable = (values.size // 8) * 8
+        if usable != values.size:
+            return FECResult(
+                values,
+                "reed_solomon",
+                False,
+                "Reed-Solomon input is not byte-aligned; no bits were discarded. "
+                "Supply explicit padding policy before decoding.",
+            )
         return decode_reed_solomon(np.packbits(values[:usable]).tobytes())
     if scheme == "concatenated":
         return decode_concatenated(values)

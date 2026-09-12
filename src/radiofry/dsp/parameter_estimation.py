@@ -17,6 +17,7 @@ class ParameterEstimate:
     carrier_frequency_hz: float | None = None
     symbol_rate_confidence: float | None = None
     symbol_rate_feature: str | None = None
+    symbol_rate_source: str = "estimated"
 
 
 def _phase_second_difference(samples: np.ndarray) -> np.ndarray:

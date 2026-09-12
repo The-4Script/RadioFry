@@ -177,11 +177,11 @@ def load_embedding_model(
     try:
         import torch
 
-        from radiofry.models.artifact_integrity import hash_torch_state_dict
+        from radiofry.models.artifact_integrity import hash_state_dict_contents
         from radiofry.models.modulation_cnn import ModulationCNN
 
         payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
-        actual_hash = hash_torch_state_dict(payload["state_dict"])
+        actual_hash = hash_state_dict_contents(payload["state_dict"])
         labels = tuple(str(name) for name in payload["labels"])
         model = ModulationCNN(int(payload.get("input_channels", 2)), len(labels))
         model.load_state_dict(payload["state_dict"])

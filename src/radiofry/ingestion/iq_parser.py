@@ -58,6 +58,13 @@ def read_iq(
         metadata["center_frequency_source"] = "sigmf_sidecar"
     if sample_rate is None:
         sample_rate = sidecar.get("sample_rate_hz")
+    if sample_rate is not None:
+        metadata["sample_rate_source"] = (
+            "sigmf_sidecar" if "sample_rate_hz" in sidecar and sample_rate == sidecar["sample_rate_hz"]
+            else "user_supplied"
+        )
+    else:
+        metadata["sample_rate_source"] = "unavailable_raw_iq_metadata"
     return UnifiedSignalContainer(
         iq=iq,
         sample_rate=sample_rate,

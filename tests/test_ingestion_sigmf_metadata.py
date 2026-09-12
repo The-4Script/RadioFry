@@ -147,6 +147,7 @@ def test_read_iq_without_a_sidecar_is_unchanged(tmp_path: Path) -> None:
     path, _, fmt = _ssb_capture(tmp_path)
 
     signal = read_iq(path, sample_rate=FS, fmt=fmt)
+    assert signal.metadata["sample_rate_source"] == "user_supplied"
 
     assert "center_frequency_hz" not in signal.metadata
     assert signal.metadata["dtype"] == fmt.dtype

@@ -26,7 +26,7 @@ import numpy as np
 
 from radiofry.contracts import UnifiedSignalContainer
 from radiofry.dsp.preprocessing import preprocess
-from radiofry.models.artifact_integrity import hash_torch_state_dict, metrics_path
+from radiofry.models.artifact_integrity import hash_state_dict_contents, metrics_path
 from radiofry.models.signal_features import add_signal_features
 from radiofry.synthetic_gen.v1 import (
     MODULATIONS,
@@ -301,7 +301,7 @@ def train_v2(
 
     checkpoint = {
         "state_dict": best_state,
-        "model_sha256": hash_torch_state_dict(best_state),
+        "model_sha256": hash_state_dict_contents(best_state),
         "labels": labels,
         "input_channels": 4,
         "sample_length": FRAME_LENGTH,

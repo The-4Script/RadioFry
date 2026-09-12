@@ -88,5 +88,7 @@ def test_pipeline_applies_manual_symbol_interleaver_and_fec_overrides(monkeypatc
     )
 
     assert report["stages"]["parameters"]["symbol_rate_hz"] == 500.0
+    assert report["stages"]["parameters"]["symbol_rate_source"] == "user_supplied"
+    assert report["source"]["sample_rate_source"] == "container_metadata"
     assert calls == {"interleaver": "diagonal", "fec": "reed_solomon"}
     assert report["stages"]["bitstream_analysis"]["selected_fec"] == "reed_solomon"

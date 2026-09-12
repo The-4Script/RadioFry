@@ -217,6 +217,8 @@ def test_gfsk_high_oversampling_never_routes_to_an_analog_demodulator(sps: int) 
             signal = _digital_signal("GFSK", sps, snr_db, seed)
             classical = estimate_modulation_family(signal.iq)
             prediction = predict_modulation(signal, CHECKPOINT)
+            if not prediction.available:
+                pytest.skip(f"CNN unavailable in this environment: {prediction.message}")
             ranked = tuple((l, c) for l, c in prediction.top_k[1:])
 
             fusion = fuse_modulation(
@@ -240,6 +242,8 @@ def test_the_blocked_decision_is_either_a_digital_label_or_a_rejection() -> None
     signal = _digital_signal("GFSK", 16, 20.0, 401)
     classical = estimate_modulation_family(signal.iq)
     prediction = predict_modulation(signal, CHECKPOINT)
+    if not prediction.available:
+        pytest.skip(f"CNN unavailable in this environment: {prediction.message}")
     ranked = tuple((l, c) for l, c in prediction.top_k[1:])
 
     fusion = fuse_modulation(prediction.label, prediction.confidence, classical.family,

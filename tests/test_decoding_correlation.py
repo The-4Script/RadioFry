@@ -169,6 +169,17 @@ def test_decode_dispatch_preserves_bits_when_fec_is_none() -> None:
     np.testing.assert_array_equal(result.bits, bits)
 
 
+def test_reed_solomon_refuses_non_byte_aligned_input_without_discarding_bits() -> None:
+    bits = np.array([0, 1, 1, 0, 1], dtype=np.uint8)
+
+    result = decode_fec(bits, "reed_solomon")
+
+    assert not result.success
+    assert result.discarded_bits == 0
+    assert "byte-aligned" in result.message
+    np.testing.assert_array_equal(result.bits, bits)
+
+
 def test_ldpc_is_explicitly_classification_only() -> None:
     result = decode_fec(np.array([0, 1, 1, 0], dtype=np.uint8), "ldpc")
 

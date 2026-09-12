@@ -14,6 +14,12 @@ class CorrelationResult:
     payload_bits: np.ndarray
     autocorrelation_peak: float = 0.0
     sync_match_score: float = 0.0
+    independent_repetitions: int = 0
+    protocol_verified: bool = False
+    false_alarm_assumption: str = (
+        "Pattern matches are candidate evidence only; no protocol semantics or "
+        "false-alarm probability is established."
+    )
 
 
 # CCSDS TM Synchronization and Channel Coding ASM, 0x1ACFFC1D.
@@ -60,4 +66,14 @@ def correlate_bitstream(bits: np.ndarray, *, sync_library: dict[str, str] | None
         period = autocorrelation_period
     split = best_positions[0] if best_positions else 0
     header_size = split + len(library[best_name]) if best_name else 0
-    return CorrelationResult(best_name, tuple(best_positions), period, values[:header_size], values[header_size:], autocorrelation_peak, best_score)
+    return CorrelationResult(
+        best_name,
+        tuple(best_positions),
+        period,
+        values[:header_size],
+        values[header_size:],
+        autocorrelation_peak,
+        best_score,
+        len(best_positions),
+        False,
+    )
