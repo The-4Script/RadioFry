@@ -34,10 +34,28 @@ def build_report(*, source: dict[str, Any], stages: dict[str, Any]) -> dict[str,
         else bool(getattr(fusion, "review_recommended", True))
     )
     verification = bitstream.get("verification", {}) if isinstance(bitstream, dict) else {}
+    fusion_dict = fusion if isinstance(fusion, dict) else {}
+    parameters = stages.get("parameters", {})
+    parameters_dict = parameters if isinstance(parameters, dict) else {}
+    prediction = stages.get("cnn_modulation", {})
+    prediction_dict = prediction if isinstance(prediction, dict) else {}
+    summary = {
+        "decision": fusion_dict.get("label", "Unclassified"),
+        "trust_score": float(fusion_dict.get("trust_score", 0.0) or 0.0),
+        "model_confidence": float(prediction_dict.get("confidence", 0.0) or 0.0),
+        "review_recommended": review_required,
+        "key_metrics": {
+            "carrier_frequency_hz": parameters_dict.get("carrier_frequency_hz"),
+            "occupied_bandwidth_hz": parameters_dict.get("occupied_bandwidth_hz"),
+            "snr_db": parameters_dict.get("snr_db"),
+            "symbol_rate_hz": parameters_dict.get("symbol_rate_hz"),
+        },
+    }
     return {
         "schema_version": "0.3",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": _json_safe(source),
+        "summary": _json_safe(summary),
         "interpretation": {
             "status": "research_prototype",
             "human_review_required": review_required,
@@ -65,6 +83,48 @@ def build_pdf_report(report: dict[str, Any], output_path: str, signal: Any | Non
     prediction = stages.get("cnn_modulation", {})
     correlation = stages.get("bitstream_analysis", {}).get("correlation", {})
     with PdfPages(output_path) as pdf:
+        summary = report.get("summary", {})
+        figure = plt.figure(figsize=(11.7, 8.3), facecolor="#0b1117")
+        figure.text(0.08, 0.78, "RADIOFRY", color="#67e0c8", fontsize=11, weight="bold")
+        figure.text(0.08, 0.68, "Signal analysis\nreport", color="white", fontsize=31, weight="bold", linespacing=1.15)
+        figure.text(0.08, 0.48, "Evidence-first interpretation of a captured RF signal", color="#c9d8d2", fontsize=13)
+        figure.text(0.08, 0.22, f"Generated {report.get('generated_at', 'unknown')}\n"
+                    f"Source: {report.get('source', {}).get('format', 'unknown').upper()}  |  "
+                    f"{report.get('source', {}).get('samples', 'unknown')} samples",
+                    color="#9eafb2", fontsize=10, linespacing=1.7)
+        figure.text(0.08, 0.08, "Confidence is evidence, not protocol verification. Human review remains part of the result.",
+                    color="#f3bd73", fontsize=9)
+        pdf.savefig(figure, facecolor=figure.get_facecolor(), bbox_inches="tight")
+        plt.close(figure)
+
+        figure, axis = plt.subplots(figsize=(11.7, 8.3))
+        figure.suptitle("Executive result", x=0.07, y=0.94, ha="left", fontsize=22, weight="bold")
+        axis.axis("off")
+        result_rows = [
+            ("Decision", summary.get("decision", fusion.get("label", "Unclassified"))),
+            ("Fused trust score", f"{summary.get('trust_score', fusion.get('trust_score', 0)):.1%}"),
+            ("CNN model confidence", f"{summary.get('model_confidence', prediction.get('confidence', 0)):.1%}"),
+            ("Review status", "REVIEW REQUIRED" if summary.get("review_recommended", True) else "Available for inspection"),
+            ("Protocol verification", "Not established" if not report.get("interpretation", {}).get("protocol_verified") else "Verified"),
+        ]
+        table = axis.table(cellText=result_rows, colLabels=["Measure", "Result"], loc="upper left",
+                           cellLoc="left", colWidths=[0.38, 0.52], bbox=[0.04, 0.43, 0.92, 0.4])
+        table.auto_set_font_size(False)
+        table.set_fontsize(12)
+        for (row, col), cell in table.get_celld().items():
+            cell.set_edgecolor("#d5dfdc")
+            if row == 0:
+                cell.set_facecolor("#173b3d")
+                cell.set_text_props(weight="bold", color="white")
+            else:
+                cell.set_facecolor("#f2f6f4" if row % 2 else "#e5eeeb")
+        axis.text(0.04, 0.27, "Interpretation", fontsize=14, weight="bold", transform=axis.transAxes)
+        axis.text(0.04, 0.22, "The result packages independent measurements, model evidence, and explicit uncertainty. "
+                  "Use the detailed pages to inspect waveform evidence and decoding limitations.",
+                  fontsize=10, transform=axis.transAxes, wrap=True, va="top")
+        pdf.savefig(figure, bbox_inches="tight")
+        plt.close(figure)
+
         if signal is not None and getattr(signal, "iq", np.array([])).size:
             samples = signal.iq[: min(signal.iq.size, 12000)]
             figure, axes = plt.subplots(2, 1, figsize=(11.7, 8.3), constrained_layout=True)

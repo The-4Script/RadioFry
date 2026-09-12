@@ -13,6 +13,7 @@ import streamlit as st
 
 from gui.theme import render_empty_state, render_method_note, render_page_shell, render_stage_header
 from gui.status import correlation_status
+from radiofry.ai_assistant import groq_available, stream_critical_review, stream_executive_brief
 from radiofry.reporting.report_builder import build_pdf_report, report_json
 
 render_page_shell(8)
@@ -70,6 +71,48 @@ else:
         st.subheader("Review notes")
         for item in limitations:
             st.warning(item)
+
+    st.subheader("AI signal analyst")
+    st.caption(
+        "Two-pass interpretation: GPT-OSS turns the measured evidence into an engineering brief, "
+        "then Qwen challenges unsupported conclusions. The AI cannot verify a protocol or replace the evidence above."
+    )
+    ai_analysis = report.get("ai_analysis", {})
+    if ai_analysis.get("brief"):
+        ai_left, ai_right = st.columns(2)
+        with ai_left:
+            st.markdown("**Evidence brief · openai/gpt-oss-120b**")
+            st.markdown(ai_analysis["brief"])
+        with ai_right:
+            st.markdown("**Critical review · qwen/qwen3.8-27b**")
+            st.markdown(ai_analysis.get("review", "No review was generated."))
+    if not groq_available():
+        st.info("AI analysis is optional. Install the GUI extras and configure GROQ_API_KEY to enable it.")
+    if st.button("Generate AI evidence brief", type="primary", disabled=not groq_available(), use_container_width=True):
+        try:
+            with st.status("Running the two-pass RF review...", expanded=True) as status:
+                st.write("First pass: synthesizing measurements and model evidence...")
+                brief_placeholder = st.empty()
+                brief_parts: list[str] = []
+                for part in stream_executive_brief(report):
+                    brief_parts.append(part)
+                    brief_placeholder.markdown("".join(brief_parts))
+                brief = "".join(brief_parts)
+                st.write("Second pass: challenging unsupported conclusions...")
+                review_placeholder = st.empty()
+                review_parts: list[str] = []
+                for part in stream_critical_review(report, brief):
+                    review_parts.append(part)
+                    review_placeholder.markdown("".join(review_parts))
+                report["ai_analysis"] = {
+                    "brief": brief,
+                    "review": "".join(review_parts),
+                    "models": ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"],
+                }
+                status.update(label="AI evidence review complete", state="complete")
+            st.rerun()
+        except (RuntimeError, OSError, ValueError) as error:
+            st.error(f"AI analysis could not be completed: {error}")
 
     downloads = st.columns(2)
     with downloads[0]:

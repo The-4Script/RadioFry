@@ -117,6 +117,22 @@ For a local deployment smoke test:
 PYTHONPATH=src streamlit run gui/app.py --server.headless true
 ```
 
+### Optional AI evidence review
+
+The Report stage can run a two-pass, evidence-grounded review with Groq. The first
+pass uses `openai/gpt-oss-120b` to write an engineering brief; the second uses
+`qwen/qwen3.8-27b` to challenge unsupported conclusions and suggest the smallest
+useful follow-up measurement. AI output is included in the JSON and PDF exports,
+but it cannot promote an unavailable stage or establish protocol verification.
+
+Install the GUI extras and set `GROQ_API_KEY` in the environment or an untracked
+`.env.local` file:
+
+```powershell
+python -m pip install -e ".[gui]"
+$env:GROQ_API_KEY = "your-key"
+```
+
 ## What to upload for a meaningful test
 
 For modulation, symbol-rate, interleaver, and FEC analysis, upload a baseband

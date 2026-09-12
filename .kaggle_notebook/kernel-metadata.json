@@ -1,0 +1,25 @@
+{
+  "id": "durveshthorat/radioml2018",
+  "id_no": 134097764,
+  "title": "radioml2018",
+  "code_file": "radioml2018.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [
+    "radioml",
+    "modulation",
+    "radiofry"
+  ],
+  "dataset_sources": [
+    "pinxau1000/radioml2018"
+  ],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": [],
+  "docker_image": "",
+  "machine_shape": "None"
+}

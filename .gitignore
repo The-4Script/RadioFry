@@ -5,6 +5,8 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .radiofry_upload
+.env
+.env.local
 # Model checkpoints ARE tracked - see the nine artifacts already under models_saved/.
 # Only scratch and smoke artifacts are excluded. A blanket /models_saved/ rule was added
 # in 8c3a1f4 alongside /data/ and /reports/; because git ignore rules do not apply to
