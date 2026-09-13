@@ -177,14 +177,6 @@ def test_non_positive_window_counts_fall_back_to_a_single_window(windows: int) -
     assert result.confidence == pytest.approx(single.confidence, abs=1e-9)
 
 
-def test_legacy_checkpoint_hashes_are_accepted_for_backward_compatibility() -> None:
-    result = predict_modulation(_capture(num_symbols=64), "models_saved/modulation_cnn.pt", windows=4)
-
-    assert result.available is True
-    assert result.label != "Unclassified"
-    assert result.confidence > 0.0
-
-
 def test_missing_checkpoint_still_reports_unavailable() -> None:
     result = predict_modulation(_capture(num_symbols=64), "models_saved/does_not_exist.pt", windows=4)
 

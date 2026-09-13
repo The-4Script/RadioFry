@@ -71,19 +71,6 @@ def serialize_sklearn_model(model: Any) -> bytes:
     return pickle.dumps(model, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def state_dict_hashes(state_dict: dict[str, Any]) -> set[str]:
-    """Return every identity the repository historically accepted for a state dict.
-
-    New checkpoints are pinned to the content hash of the tensor values themselves.
-    Older tracked checkpoints were created with the serialised-bytes hash emitted by
-    `torch.save`, so the loader retains that compatibility path for reproducibility.
-    """
-
-    hashes = {hash_state_dict_contents(state_dict)}
-    hashes.add(hash_torch_state_dict(state_dict))
-    return hashes
-
-
 def metrics_path(model_path: str | Path) -> Path:
     path = Path(model_path)
     return path.with_name(f"{path.stem}_metrics.json")

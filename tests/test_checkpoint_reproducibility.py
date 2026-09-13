@@ -74,6 +74,49 @@ def test_the_checkpoint_and_its_metrics_agree_on_the_hash() -> None:
     assert metrics["model_sha256"] == payload["model_sha256"]
 
 
+def test_the_stored_hash_actually_matches_the_weights() -> None:
+    """Cross-file agreement above is necessary but not sufficient: a checkpoint
+    and its metrics sibling can carry the same STALE hash and still agree with
+    each other. This recomputes hash_state_dict_contents from the live weights
+    - the exact call predict_modulation makes - so a checkpoint that would
+    silently return Unclassified on every real prediction fails here instead
+    of in production."""
+    from radiofry.models.artifact_integrity import hash_state_dict_contents
+
+    payload = torch.load(CHECKPOINT, map_location="cpu", weights_only=False)
+    assert payload["model_sha256"] == hash_state_dict_contents(payload["state_dict"])
+
+
+ALL_CHECKPOINTS_WITH_METRICS = sorted(
+    p for p in Path("models_saved").glob("*.pt") if metrics_path(p).is_file()
+)
+
+
+@pytest.mark.parametrize("checkpoint", ALL_CHECKPOINTS_WITH_METRICS, ids=lambda p: p.name)
+def test_every_shipped_checkpoint_with_metrics_verifies(checkpoint: Path) -> None:
+    """Found: four of the five shipped checkpoints (every one except the
+    production default) carried a model_sha256 written by the old, environment-
+    dependent hash_torch_state_dict, from before the portable hash_state_dict_contents
+    existed. Checkpoint and metrics agreed with each other - the one check
+    above this used to run - while both disagreed with the actual weights, so
+    that check passed on all four. predict_modulation verifies against
+    hash_state_dict_contents, so every one of the four failed its integrity
+    check unconditionally, on any machine - not only the environment-dependent
+    case the portable hash was written to fix. `test_the_previous_baseline_checkpoint_
+    is_still_available` above requires modulation_cnn.pt to "stay reproducible";
+    it could not have loaded through predict_modulation in this state.
+    Fixed by recomputing and rewriting model_sha256 in the checkpoint and its
+    metrics sibling; weights untouched. This test is what keeps it fixed."""
+    from radiofry.models.artifact_integrity import hash_state_dict_contents
+
+    payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    metrics = json.loads(metrics_path(checkpoint).read_text(encoding="utf-8"))
+    actual = hash_state_dict_contents(payload["state_dict"])
+
+    assert payload["model_sha256"] == actual, f"{checkpoint} checkpoint hash is stale"
+    assert metrics["model_sha256"] == actual, f"{checkpoint} metrics hash is stale"
+
+
 def test_inference_actually_loads_the_production_default() -> None:
     time = np.arange(4_096) / 200_000.0
     signal = UnifiedSignalContainer(

@@ -80,7 +80,7 @@ def _ai_report_context(report: dict[str, Any], limit: int = 8000) -> str:
 
 
 def _stream(model: str, prompt: str, *, temperature: float, top_p: float, reasoning_effort: str) -> Iterator[str]:
-    from groq import RateLimitError
+    from groq import AuthenticationError, GroqError, RateLimitError
 
     try:
         completion = _client().chat.completions.create(
@@ -93,16 +93,27 @@ def _stream(model: str, prompt: str, *, temperature: float, top_p: float, reason
             stream=True,
             stop=None,
         )
+        for chunk in completion:
+            if chunk.choices:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield content
     except RateLimitError as error:
         raise RuntimeError(
             "Groq rejected the request because it exceeded the model or account limit. "
             "The evidence prompt was bounded; wait briefly and try again."
         ) from error
-    for chunk in completion:
-        if chunk.choices:
-            content = chunk.choices[0].delta.content
-            if content:
-                yield content
+    except AuthenticationError as error:
+        raise RuntimeError(
+            "Groq rejected the request: GROQ_API_KEY is missing, invalid, or revoked."
+        ) from error
+    except GroqError as error:
+        # Every other Groq failure (connection drop, timeout, malformed request, a 5xx
+        # from Groq, or a disconnect partway through the stream) is a GroqError subclass,
+        # not a RuntimeError/OSError/ValueError. It was previously uncaught here, so it
+        # skipped the friendly banner gui/pages/8_report.py renders for RuntimeError and
+        # crashed the report page with a raw traceback instead.
+        raise RuntimeError(f"Groq request failed: {error}") from error
 
 
 def stream_executive_brief(report: dict[str, Any]) -> Iterator[str]:

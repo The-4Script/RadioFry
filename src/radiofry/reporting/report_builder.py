@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 import json
+import math
 from typing import Any
 
 import numpy as np
@@ -9,11 +10,18 @@ import numpy as np
 
 def _json_safe(value: Any) -> Any:
     if isinstance(value, complex):
-        return {"real": float(value.real), "imag": float(value.imag)}
+        return {"real": _json_safe(float(value.real)), "imag": _json_safe(float(value.imag))}
     if isinstance(value, np.ndarray):
         return _json_safe(value.tolist())
     if isinstance(value, np.generic):
-        return value.item()
+        return _json_safe(value.item())
+    if isinstance(value, float) and not math.isfinite(value):
+        # NaN/Infinity serialise as bare NaN/Infinity tokens under Python's json module
+        # (a non-standard extension) but are not valid JSON per RFC 8259, so a strict
+        # parser downstream of the JSON/PDF export would reject the whole report over
+        # one unavailable number. A value the pipeline could not compute is reported as
+        # absent, consistent with never presenting a stage result it cannot stand behind.
+        return None
     if hasattr(value, "__dataclass_fields__"):
         return {name: _json_safe(getattr(value, name)) for name in value.__dataclass_fields__}
     if isinstance(value, dict):
