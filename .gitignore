@@ -25,3 +25,4 @@ data/2018.01/
 reports/*.png
 /data/
 /reports/
+!reports/benchmark_v039/results.pkl
