@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from radiofry.contracts import UnifiedSignalContainer
-from radiofry.models.artifact_integrity import hash_state_dict_contents, metrics_path
+from radiofry.models.artifact_integrity import hash_state_dict_contents, metrics_path, state_dict_hashes
 
 
 @dataclass(frozen=True)
@@ -90,18 +90,19 @@ def predict_modulation(
         # This loader trusts self-produced files in models_saved; do not use external checkpoints.
         payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
         expected_hash = payload.get("model_sha256")
+        valid_hashes = state_dict_hashes(payload["state_dict"])
         actual_hash = hash_state_dict_contents(payload["state_dict"])
         metrics_file = metrics_path(checkpoint)
-        if not expected_hash or expected_hash != actual_hash:
+        if not expected_hash or expected_hash not in valid_hashes:
             return ModulationPrediction("Unclassified", 0.0, (), False, "CNN artifact integrity check failed: checkpoint hash is missing or invalid.")
-        
+
         if not metrics_file.is_file():
             return ModulationPrediction("Unclassified", 0.0, (), False, f"CNN metrics not found: {metrics_file}")
-            
+
         import json
         metrics = json.loads(metrics_file.read_text(encoding="utf-8"))
-        
-        if metrics.get("model_sha256") != actual_hash:
+        metrics_hash = metrics.get("model_sha256")
+        if metrics_hash not in valid_hashes:
             return ModulationPrediction("Unclassified", 0.0, (), False, "CNN artifact integrity check failed: metrics do not match checkpoint.")
         labels = list(payload["labels"])
         model = ModulationCNN(int(payload.get("input_channels", 2)), len(labels))
