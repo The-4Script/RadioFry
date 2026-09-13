@@ -1,5 +1,5 @@
 {
-  "model_sha256": "c97d9e18cef183c9bb4dc8b0cb3c97ef77ad28d36fb654584304b9da63ab8a1f",
+  "model_sha256": "d52f7b199f069c35b91dcf026c25f52cdac863733ac4ab55142c5d4c9748078d",
   "samples": 220000,
   "classes": [
     "8PSK",
